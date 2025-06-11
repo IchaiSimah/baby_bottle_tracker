@@ -14,7 +14,7 @@ TOKEN = os.getenv("TELEGRAM_TOKEN")
 DATA_FILE = "biberons.json"
 ASK_AMOUNT, ASK_TIME = range(2)
 
-# Chargement et sauvegarde des données (groupes)
+# load and save data
 def load_data():
     try:
         with open(DATA_FILE, 'r') as file:
@@ -26,25 +26,25 @@ def save_data(data):
     with open(DATA_FILE, 'w') as file:
         json.dump(data, file, indent=2)
 
-# Trouve le groupe auquel appartient l'utilisateur
+# find the group to which the user belongs
 def find_group_for_user(data, user_id):
     for group_name, group_info in data.items():
         if user_id in group_info.get("users", []):
             return group_name
     return None
 
-# Création d'un groupe personnel pour un utilisateur
+# create a personal group for a user
 def create_personal_group(data, user_id):
     group_name = f"group_{user_id}"
     data[group_name] = {"users": [user_id], "entries": []}
     return group_name
 
-# Commande /add : commence la conversation
+# command /add : start the conversation
 async def add(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Quelle quantité de biberon avez-vous donné à votre bébé (en ml) ?")
     return ASK_AMOUNT
 
-# Gestion de la quantité
+# handle the amount
 async def handle_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         amount = int(update.message.text)
@@ -55,7 +55,7 @@ async def handle_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Quantité invalide, merci de saisir un nombre en ml.")
         return ASK_AMOUNT
 
-# Gestion de l'heure et enregistrement dans le groupe
+# handle the time and save in the group
 async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     try:
@@ -87,7 +87,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ Ajout annulé.")
     return ConversationHandler.END
 
-# Commande /last : dernier biberon du groupe
+# command /last : last biberon of the group
 async def last(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     data = load_data()
@@ -102,7 +102,7 @@ async def last(update: Update, context: ContextTypes.DEFAULT_TYPE):
     last_entry = entries[-1]
     await update.message.reply_text(f"🍼 Dernier biberon: {last_entry['amount']}ml à {last_entry['time']}")
 
-# Commande /list : 4 derniers biberons du groupe
+# command /list : 4 last biberons of the group
 async def list_biberons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     data = load_data()
@@ -119,7 +119,7 @@ async def list_biberons(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for entry in last_entries:
         await update.message.reply_text(f"{entry['amount']}ml à {entry['time']}")
 
-# Commande /total : total du jour du groupe
+# command /total : total of the day of the group
 async def total(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     data = load_data()
@@ -131,7 +131,7 @@ async def total(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total_ml = sum(entry["amount"] for entry in data[group]["entries"] if today in entry["time"])
     await update.message.reply_text(f"📊 Total aujourd'hui : {total_ml}ml")
 
-# Commande /delete : supprime dernier biberon du groupe
+# command /delete : delete the last biberon of the group
 async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     data = load_data()
@@ -146,7 +146,7 @@ async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_data(data)
     await update.message.reply_text(f"✅ Dernier biberon supprimé dans {group}.")
 
-# Commande /join pour rejoindre un groupe existant
+# command /join to join an existing group
 async def join(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if len(context.args) == 0:
@@ -169,7 +169,7 @@ async def join(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_data(data)
     await update.message.reply_text(f"✅ Tu as rejoint le groupe {group_name}.")
 
-# Commande /start et /help
+# command /start and /help
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👋 Hello ! Commandes disponibles :\n"
@@ -185,7 +185,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await start(update, context)
 
-# Gestion des erreurs
+# error handling
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     print(f"Error: {context.error}")
     if update and update.effective_message:
