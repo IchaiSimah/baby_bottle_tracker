@@ -7,8 +7,6 @@ from handlers.group import join
 from handlers.queries import last, list_biberons, total
 from handlers.delete import delete
 from handlers.admin import save_backup, restore_backup
-import asyncio
-from utils import load_backup_from_channel
 
 ########################################################
 # This part is totally optional, it's just to avoid Render errors
@@ -51,13 +49,13 @@ async def error_handler(update, context):
     if update and update.effective_message:
         await update.effective_message.reply_text("❌ Une erreur s'est produite. Veuillez réessayer.")
 
-async def main():
+def main():
     load_dotenv()
     TOKEN = os.getenv("TELEGRAM_TOKEN")
 
     print("Initializing bot...")
     app = ApplicationBuilder().token(TOKEN).build()
-    await load_backup_from_channel(app)
+
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("add", add)],
         states={
@@ -84,4 +82,4 @@ async def main():
     app.run_polling()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
