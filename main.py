@@ -7,7 +7,7 @@ from handlers.group import join
 from handlers.queries import last, list_biberons, total
 from handlers.delete import delete
 from handlers.admin import save_backup, restore_backup
-from utils import load_backup_from_channel
+from utils import load_data, load_backup_from_channel
 
 ########################################################
 # This part is totally optional, it's just to avoid Render errors
@@ -50,27 +50,13 @@ async def error_handler(update, context):
     if update and update.effective_message:
         await update.effective_message.reply_text("❌ Une erreur s'est produite. Veuillez réessayer.")
 
-async def load_backup_on_startup(app):
-    try:
-        print("Attempting to load backup data from channel...")
-        # Wait a bit for the bot to be fully initialized
-        await asyncio.sleep(5)
-        await load_backup_from_channel(app)
-        print("Backup data loaded successfully.")
-    except Exception as e:
-        print(f"Warning: Could not load backup data: {e}")
-        print("Bot will continue with existing data file.")
-
-async def main():
+def main():
     load_dotenv()
     TOKEN = os.getenv("TELEGRAM_TOKEN")
 
     print("Initializing bot...")
     app = ApplicationBuilder().token(TOKEN).build()
-
-    # Start backup loading in background
-    asyncio.create_task(load_backup_on_startup(app))
-
+    app.job_queue.run_once(load_backup_from_channel, when=0)
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("add", add)],
         states={
@@ -94,11 +80,7 @@ async def main():
     app.add_error_handler(error_handler)
 
     print("Bot started.")
-    await app.initialize()  # Ensure bot is properly initialized
-    await app.start()
-    await app.run_polling()
-    await app.stop()
+    app.run_polling()
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    main()
