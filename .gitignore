@@ -1,2 +1,5 @@
 .env
 biberons.json
+run_bot.bat
+__pycache__
+handlers/__pycache__
