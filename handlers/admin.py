@@ -22,7 +22,6 @@ async def restore_backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not update.message.document:
                 await update.message.reply_text("📎 Envoie un fichier .json en pièce jointe.")
-                return
             file = await update.message.document.get_file()
             await file.download_to_drive("biberons.json")
             await update.message.reply_text("✅ Sauvegarde restaurée avec succès.")
