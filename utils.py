@@ -29,3 +29,19 @@ def create_personal_group(data, user_id):
     group_name = f"group_{user_id}"
     data[group_name] = {"users": [user_id], "entries": []}
     return group_name
+
+async def load_backup_from_channel(context):
+    try:
+        messages = await context.bot.get_chat_history(chat_id=BACKUP_CHANNEL_ID, limit=1)
+        if messages and messages[0] and messages[0].document:
+            document = messages[0].document
+            await context.bot.download_file(document.file_path, "backup_biberons.json")
+            with open("backup_biberons.json", "r") as f:
+                data = json.load(f)
+            with open(DATA_FILE, 'w') as file:
+                json.dump(data, file, indent=2)
+                await context.bot.send_message(chat_id=BACKUP_CHANNEL_ID, text="Sauvegarde chargée avec succès")
+            
+            
+    except Exception as e:
+        print(f"Erreur de chargement de la sauvegarde : {e}")
