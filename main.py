@@ -6,6 +6,7 @@ from handlers.add import add, handle_amount, handle_time, cancel, ASK_AMOUNT, AS
 from handlers.group import join
 from handlers.queries import last, list_biberons, total
 from handlers.delete import delete
+from handlers.admin import save_backup, restore_backup
 
 async def start(update, context):
     await update.message.reply_text(
@@ -50,6 +51,8 @@ def main():
     app.add_handler(CommandHandler("list", list_biberons))
     app.add_handler(CommandHandler("delete", delete))
     app.add_handler(CommandHandler("join", join))
+    app.add_handler(CommandHandler("save_backup", save_backup))
+    app.add_handler(CommandHandler("restore_backup", restore_backup))
     app.add_handler(conv_handler)
 
     app.add_error_handler(error_handler)
