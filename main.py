@@ -7,7 +7,7 @@ from handlers.group import join
 from handlers.queries import last, list_biberons, total
 from handlers.delete import delete
 from handlers.admin import save_backup, restore_backup
-from utils import load_data, load_backup_from_channel
+from utils import load_data, save_data, load_backup_from_channel    
 
 ########################################################
 # This part is totally optional, it's just to avoid Render errors
@@ -50,13 +50,17 @@ async def error_handler(update, context):
     if update and update.effective_message:
         await update.effective_message.reply_text("❌ Une erreur s'est produite. Veuillez réessayer.")
 
+async def on_startup(app):
+    print("Chargement du backup...")
+    await load_backup_from_channel(app)
+
 def main():
     load_dotenv()
     TOKEN = os.getenv("TELEGRAM_TOKEN")
 
     print("Initializing bot...")
-    app = ApplicationBuilder().token(TOKEN).build()
-    app.job_queue.run_once(load_backup_from_channel, when=0)
+    app = ApplicationBuilder().token(TOKEN).post_init(on_startup).build()
+
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("add", add)],
         states={
