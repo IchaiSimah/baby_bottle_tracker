@@ -9,7 +9,7 @@ load_dotenv()
 ADMIN_ID = os.getenv("ADMIN_ID")
 
 async def save_backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id == ADMIN_ID:
+    if update.effective_user.id == int(ADMIN_ID):
         try:
             await update.message.reply_document(document=open("biberons.json", "rb"))
         except Exception as e:
@@ -18,9 +18,7 @@ async def save_backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("You are not authorized to use this command.")
 
 async def restore_backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(str(update.effective_user.id))
-    await update.message.reply_text(str(ADMIN_ID))
-    if update.effective_user.id == ADMIN_ID:
+    if update.effective_user.id == int(ADMIN_ID):
         try:
             if not update.message.document:
                 await update.message.reply_text("📎 Envoie un fichier .json en pièce jointe.")
