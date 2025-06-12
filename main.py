@@ -8,6 +8,27 @@ from handlers.queries import last, list_biberons, total
 from handlers.delete import delete
 from handlers.admin import save_backup, restore_backup
 
+########################################################
+# This part is totally optional, it's just to avoid Render errors
+# If you don't use Render, just remove it
+########################################################
+
+import threading
+import http.server
+import socketserver
+
+def run_fake_server():
+    PORT = 8080
+    Handler = http.server.SimpleHTTPRequestHandler
+    with socketserver.TCPServer(("", PORT), Handler) as httpd:
+        httpd.serve_forever()
+
+threading.Thread(target=run_fake_server, daemon=True).start()
+
+########################################################
+# End of fake server
+########################################################
+
 async def start(update, context):
     await update.message.reply_text(
         "👋 Hello ! Commandes disponibles :\n"
