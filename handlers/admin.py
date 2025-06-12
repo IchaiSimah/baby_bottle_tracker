@@ -20,12 +20,14 @@ async def save_backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def restore_backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id == int(ADMIN_ID):
         try:
-            if not update.message.document:
-                await update.message.reply_text("📎 Envoie un fichier .json en pièce jointe.")
-            file = await update.message.document.get_file()
+            file = await update.message.document
+            filename = file.file_name or ""
+            if not filename.endswith(".json"):
+                await update.message.reply_text("📎 Ce fichier ne peut pas être pris en charge.")
+                return
             await file.download_to_drive("biberons.json")
             await update.message.reply_text("✅ Sauvegarde restaurée avec succès.")
         except Exception as e:
-            await update.message.reply_text(f"Error sending file: {e}")
+            await update.message.reply_text(f"Error charging file: {e}")
     else:
         await update.message.reply_text("You are not authorized to use this command.")

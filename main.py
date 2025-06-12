@@ -52,7 +52,7 @@ def main():
     app.add_handler(CommandHandler("delete", delete))
     app.add_handler(CommandHandler("join", join))
     app.add_handler(CommandHandler("save_backup", save_backup))
-    app.add_handler(CommandHandler("restore_backup", restore_backup))
+    app.add_handler(MessageHandler(filters.Document.ALL, restore_backup))
     app.add_handler(conv_handler)
 
     app.add_error_handler(error_handler)
