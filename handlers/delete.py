@@ -14,5 +14,5 @@ async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Aucun biberon à supprimer dans votre groupe.")
         return
     data[group]["entries"].pop()
-    save_data(data)
+    await save_data(data, context)
     await update.message.reply_text(f"✅ Dernier biberon supprimé dans {group}.")

@@ -39,7 +39,7 @@ async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
             group = create_personal_group(data, user_id)
 
         data[group]["entries"].append({"amount": amount, "time": timestamp})
-        save_data(data)
+        await save_data(data, context)
 
         await update.message.reply_text(f"✅ Biberon de {amount}ml enregistré à {time_str}.")
         return ConversationHandler.END
