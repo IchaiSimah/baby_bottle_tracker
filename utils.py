@@ -1,7 +1,24 @@
 import json
+from telethon.sync import TelegramClient
+import os
+from dotenv import load_dotenv
+from telethon.sessions import StringSession
+
+load_dotenv()
 
 DATA_FILE = "biberons.json"
-BACKUP_CHANNEL_ID = -1002871053724
+BACKUP_CHANNEL_ID = os.getenv("BACKUP_CHANNEL_ID")
+TELEGRAM_API_ID = os.getenv("TELEGRAM_API_ID")
+TELEGRAM_API_HASH = os.getenv("TELEGRAM_API_HASH")
+SESSION_STRING = os.getenv("STRING_SESSION")
+
+
+if not all([TELEGRAM_API_ID, TELEGRAM_API_HASH, BACKUP_CHANNEL_ID]):
+    missing = []
+    if not TELEGRAM_API_ID: missing.append("TELEGRAM_API_ID")
+    if not TELEGRAM_API_HASH: missing.append("TELEGRAM_API_HASH")
+    if not BACKUP_CHANNEL_ID: missing.append("BACKUP_CHANNEL_ID")
+    raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
 
 def load_data():
     try:
@@ -30,21 +47,27 @@ def create_personal_group(data, user_id):
     data[group_name] = {"users": [user_id], "entries": []}
     return group_name
 
-async def load_backup_from_channel(app):
+def load_backup_from_channel():
     try:
-        messages = await app.bot.get_chat_history(chat_id=BACKUP_CHANNEL_ID, limit=1)
-        if messages and messages[0].document:
-            file = await app.bot.get_file(messages[0].document.file_id)
-            await file.download_to_drive("backup_biberons.json")
+        print("Connecting to Telegram...")
+        with TelegramClient(StringSession(SESSION_STRING), int(TELEGRAM_API_ID), TELEGRAM_API_HASH) as client:
+            print("Fetching latest backup...")
+            messages = client.get_messages(int(BACKUP_CHANNEL_ID), limit=1)
+            if messages and messages[0].document:
+                print("Downloading backup file...")
+                client.download_media(messages[0], "backup_biberons.json")
 
-            with open("backup_biberons.json", "r") as f:
-                data = json.load(f)
+                print("Loading backup data...")
+                with open("backup_biberons.json", "r") as f:
+                    data = json.load(f)
 
-            with open(DATA_FILE, 'w') as file_out:
-                json.dump(data, file_out, indent=2)
-            print("✅ Backup chargé avec succès.")
-        else:
-            print("❌ Aucun document trouvé dans le canal.")
+                with open(DATA_FILE, 'w') as file_out:
+                    json.dump(data, file_out, indent=2)
+                    
+                print("✅ Backup loaded successfully")
+                client.send_message(int(BACKUP_CHANNEL_ID), "✅ Backup chargé avec succès.")
+            else:
+                print("❌ Aucun document trouvé dans le canal.")
 
     except Exception as e:
         print(f"⚠️ Erreur pendant le chargement du backup : {e}")

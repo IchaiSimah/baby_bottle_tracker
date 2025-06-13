@@ -1,13 +1,14 @@
 import os
 from dotenv import load_dotenv
 from telegram.ext import ApplicationBuilder, CommandHandler, ConversationHandler, MessageHandler, filters
+from telegram import Update
 
 from handlers.add import add, handle_amount, handle_time, cancel, ASK_AMOUNT, ASK_TIME
 from handlers.group import join
 from handlers.queries import last, list_biberons, total
 from handlers.delete import delete
 from handlers.admin import save_backup, restore_backup
-from utils import load_data, save_data, load_backup_from_channel    
+from utils import load_backup_from_channel
 import asyncio
 
 ########################################################
@@ -51,18 +52,22 @@ async def error_handler(update, context):
     if update and update.effective_message:
         await update.effective_message.reply_text("❌ Une erreur s'est produite. Veuillez réessayer.")
 
-async def startup_tasks(app):
-    print("Chargement du backup...")
-    await load_backup_from_channel(app)
-
 def main():
     load_dotenv()
     TOKEN = os.getenv("TELEGRAM_TOKEN")
 
     print("Initializing bot...")
     app = ApplicationBuilder().token(TOKEN).build()
-    app.post_init(lambda app: asyncio.create_task(startup_tasks(app)))
 
+    # Load backup before setting up handlers
+    print("Loading backup...")
+    try:
+        load_backup_from_channel()
+        print("Backup loaded successfully")
+    except Exception as e:
+        print(f"Warning: Could not load backup: {e}")
+
+    print("Setting up bot...")
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("add", add)],
         states={
@@ -82,10 +87,9 @@ def main():
     app.add_handler(CommandHandler("save_backup", save_backup))
     app.add_handler(MessageHandler(filters.Document.ALL, restore_backup))
     app.add_handler(conv_handler)
-
     app.add_error_handler(error_handler)
 
-    print("Bot started.")
+    print("Starting bot...")
     app.run_polling()
 
 if __name__ == "__main__":

@@ -3,3 +3,5 @@ biberons.json
 run_bot.bat
 __pycache__
 handlers/__pycache__
+anon.session
+backup_biberons.json
