@@ -5,6 +5,8 @@ from dotenv import load_dotenv
 from telethon.sessions import StringSession
 from datetime import datetime, time, timedelta
 
+TEST_MODE = False
+
 load_dotenv()
 
 DATA_FILE = "biberons.json"
@@ -31,6 +33,8 @@ def load_data():
 async def save_data(data, context):
     with open(DATA_FILE, 'w') as file:
         json.dump(data, file, indent=2)
+    if TEST_MODE:
+        return
     try:
         with open(DATA_FILE, "rb") as f:
             await context.bot.send_document(chat_id=BACKUP_CHANNEL_ID, document=f, filename="backup_biberons.json", caption="🧠 Nouvelle sauvegarde")
@@ -72,3 +76,16 @@ def load_backup_from_channel():
 
     except Exception as e:
         print(f"⚠️ Erreur pendant le chargement du backup : {e}")
+
+        
+def is_valid_time(time_str: str) -> bool:
+    try:
+        # Vérifie si l'heure est au format HH:MM
+        if not (len(time_str) == 5 and time_str[2] == ':'):
+            return False
+        
+        hours, minutes = map(int, time_str.split(':'))
+        # Vérifie si les heures et minutes sont dans les limites valides
+        return 0 <= hours <= 23 and 0 <= minutes <= 59
+    except (ValueError, IndexError):
+        return False

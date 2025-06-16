@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, filters
 from zoneinfo import ZoneInfo
-from utils import load_data, save_data, find_group_for_user, create_personal_group
+from utils import load_data, save_data, find_group_for_user, create_personal_group, is_valid_time
 
 ASK_AMOUNT, ASK_TIME = range(2)
 
@@ -63,6 +63,8 @@ async def handle_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(e)
         return ASK_AMOUNT
 
+
+
 async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = load_data()
     user_id = update.effective_user.id
@@ -71,13 +73,21 @@ async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         time_str = update.message.text.strip()
+        if time_str == "/cancel":
+            await update.message.reply_text("❌ Ajout annulé.", reply_markup=ReplyKeyboardRemove())
+            return ConversationHandler.END
+            
         if time_str.lower() == "/now":
             time_str = (datetime.now(ZoneInfo("UTC")) + time_difference).strftime("%H:%M")
         elif time_str.startswith("/"):
             time_str = time_str[1:]
-            datetime.strptime(time_str, "%H:%M")
-        else:
-            datetime.strptime(time_str, "%H:%M")  
+            
+        # Vérification du format de l'heure
+        if not is_valid_time(time_str):
+            await update.message.reply_text(
+                "❌ Format d'heure invalide. Merci d'utiliser le format HH:MM (ex: 14:30)\n"
+            )
+            return ASK_TIME
 
         date = datetime.now().date().strftime("%d-%m-%Y")
         timestamp = f"{date} {time_str}"
@@ -86,12 +96,13 @@ async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data[group]["entries"].append({"amount": amount, "time": timestamp})
         await save_data(data, context)
 
-        await update.message.reply_text(f"✅ Biberon de {amount}ml enregistré à {time_str}.", ReplyKeyboardRemove())
+        await update.message.reply_text(f"✅ Biberon de {amount}ml enregistré à {time_str}.", reply_markup = ReplyKeyboardRemove())
         return ConversationHandler.END
-    except ValueError:
+    except ValueError as e:
         await update.message.reply_text("❌ Format d'heure invalide, merci de saisir HH:MM ou /now.")
+        print(e)
         return ASK_TIME
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("❌ Ajout annulé.", ReplyKeyboardRemove())
+    await update.message.reply_text("❌ Ajout annulé.", reply_markup = ReplyKeyboardRemove())
     return ConversationHandler.END
