@@ -25,7 +25,7 @@ async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         time_str = update.message.text.strip()
         if time_str.lower() == "/now":
-            time_str = datetime.now().strftime("%H:%M")
+            time_str = datetime.now(zoneinfo.timezone("Asia/Jerusalem")).strftime("%H:%M")
         else:
             datetime.strptime(time_str, "%H:%M")  # vérifie format heure
 
