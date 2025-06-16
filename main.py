@@ -8,8 +8,9 @@ from handlers.group import join
 from handlers.queries import last, list_biberons, total
 from handlers.delete import delete
 from handlers.admin import save_backup, restore_backup
+from handlers.time import time, timeUpdate
 from utils import load_backup_from_channel
-import asyncio
+import sys
 
 ########################################################
 # This part is totally optional, it's just to avoid Render errors
@@ -42,6 +43,8 @@ async def start(update, context):
         "/delete - Supprime le dernier biberon\n"
         "/join <nom_du_groupe> - Rejoindre un groupe\n"
         "/help - Affiche cette aide\n"
+        "/timeUpdate <HH:MM> - Met à jour l'heure du bot\n"
+        "/time - Affiche l'heure du bot\n"
     )
 
 async def help_command(update, context):
@@ -53,6 +56,7 @@ async def error_handler(update, context):
         await update.effective_message.reply_text("❌ Une erreur s'est produite. Veuillez réessayer.")
 
 def main():
+    print(sys.version)
     load_dotenv()
     TOKEN = os.getenv("TELEGRAM_TOKEN")
 
@@ -88,6 +92,8 @@ def main():
     app.add_handler(MessageHandler(filters.Document.ALL, restore_backup))
     app.add_handler(conv_handler)
     app.add_error_handler(error_handler)
+    app.add_handler(CommandHandler("timeUpdate", timeUpdate))
+    app.add_handler(CommandHandler("time", time))
 
     print("Starting bot...")
     app.run_polling()

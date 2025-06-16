@@ -3,6 +3,7 @@ from telethon.sync import TelegramClient
 import os
 from dotenv import load_dotenv
 from telethon.sessions import StringSession
+from datetime import datetime, time, timedelta
 
 load_dotenv()
 
@@ -44,7 +45,7 @@ def find_group_for_user(data, user_id):
 
 def create_personal_group(data, user_id):
     group_name = f"group_{user_id}"
-    data[group_name] = {"users": [user_id], "entries": []}
+    data[group_name] = {"users": [user_id], "entries": [], "time_difference": timedelta(0)}
     return group_name
 
 def load_backup_from_channel():
