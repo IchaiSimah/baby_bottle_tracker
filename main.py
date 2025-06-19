@@ -113,7 +113,7 @@ def main():
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("add", add)],
         states={
-            ASK_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_amount)],
+            ASK_AMOUNT: [MessageHandler(filters.TEXT | filters.COMMAND, handle_amount)],
             ASK_TIME: [MessageHandler(filters.TEXT | filters.COMMAND, handle_time)],
         },
         fallbacks=[CommandHandler("cancel", cancel)]

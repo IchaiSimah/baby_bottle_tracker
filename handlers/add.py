@@ -27,7 +27,10 @@ async def add(update: Update, context: ContextTypes.DEFAULT_TYPE):
         group = create_personal_group(data, user_id)
     if not "time_difference" in data[group]:
         data[group]["time_difference"] = 0
-    await update.message.reply_text("Quelle quantité de biberon avez-vous donné à votre bébé (en ml) ?")
+    if not "last_bottle" in data[group]:
+        await update.message.reply_text("Quelle quantité de biberon avez-vous donné à votre bébé (en ml) ?")
+    else:
+        await update.message.reply_text(f"Quelle quantité de biberon avez-vous donné à votre bébé (en ml)? /{data[group]['last_bottle']}ml?")
     await save_data(data, context)
     return ASK_AMOUNT
 
@@ -37,7 +40,13 @@ async def handle_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     group = find_group_for_user(data, user_id)
     time_difference = timedelta(hours=data[group]["time_difference"])
     try:
-        amount = int(update.message.text)
+        if update.message.text == "/cancel":
+            await update.message.reply_text("❌ Ajout annulé.", reply_markup=ReplyKeyboardRemove())
+            return ConversationHandler.END
+        if "last_bottle" in data[group] and update.message.text == f"/{data[group]['last_bottle']}ml":
+            amount = data[group]["last_bottle"]
+        else:
+                amount = int(update.message.text)
         context.user_data['amount'] = amount
         if TEST_MODE:
             current_time = (datetime.now(ZoneInfo("UTC")) + time_difference).replace(hour=0, minute=50)
@@ -103,6 +112,7 @@ async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
         amount = context.user_data['amount']
 
         data[group]["entries"].append({"amount": amount, "time": timestamp})
+        data[group]["last_bottle"] = amount
         await save_data(data, context)
 
         await update.message.reply_text(f"✅ Biberon de {amount}ml enregistré à {time_str}.", reply_markup = ReplyKeyboardRemove())
