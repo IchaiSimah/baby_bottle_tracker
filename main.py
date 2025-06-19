@@ -10,6 +10,8 @@ from handlers.delete import delete
 from handlers.admin import save_backup, restore_backup
 from handlers.time import time, timeUpdate
 from utils import load_backup_from_channel
+from config import TEST_MODE
+
 import sys
 import traceback
 import asyncio
@@ -21,6 +23,7 @@ import asyncio
 import threading
 import http.server
 import socketserver
+
 
 
 def run_fake_server():
@@ -90,7 +93,10 @@ async def set_commands(app):
 
 def main():
     load_dotenv()
-    TOKEN = os.getenv("TELEGRAM_TOKEN")
+    if TEST_MODE:
+        TOKEN = os.getenv("TEST_TOKEN")
+    else:
+        TOKEN = os.getenv("TELEGRAM_TOKEN")
 
     print("Initializing bot...")
     app = ApplicationBuilder().token(TOKEN).post_init(set_commands).build()

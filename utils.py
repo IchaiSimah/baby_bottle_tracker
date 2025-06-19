@@ -4,8 +4,8 @@ import os
 from dotenv import load_dotenv
 from telethon.sessions import StringSession
 from datetime import datetime, time, timedelta
-
-TEST_MODE = False
+from config import TEST_MODE
+from zoneinfo import ZoneInfo
 
 load_dotenv()
 
@@ -89,3 +89,13 @@ def is_valid_time(time_str: str) -> bool:
         return 0 <= hours <= 23 and 0 <= minutes <= 59
     except (ValueError, IndexError):
         return False
+    
+def getValidDate(time: str, difference: int) -> str:
+    date = datetime.now().date()
+    timeToCompare = datetime.strptime(time, "%H:%M").time()
+    actualTime = (datetime.now(ZoneInfo("UTC")) + timedelta(hours=difference)).time()
+    if actualTime < timeToCompare:
+        return (date - timedelta(days=1)).strftime("%d-%m-%Y")
+    else:
+        return date.strftime("%d-%m-%Y")
+

@@ -2,7 +2,8 @@ from datetime import datetime, timedelta
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, filters
 from zoneinfo import ZoneInfo
-from utils import load_data, save_data, find_group_for_user, create_personal_group, is_valid_time
+from utils import load_data, save_data, find_group_for_user, create_personal_group, is_valid_time, getValidDate
+from config import TEST_MODE
 
 ASK_AMOUNT, ASK_TIME = range(2)
 
@@ -38,7 +39,10 @@ async def handle_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         amount = int(update.message.text)
         context.user_data['amount'] = amount
-        current_time = datetime.now(ZoneInfo("UTC")) + time_difference
+        if TEST_MODE:
+            current_time = (datetime.now(ZoneInfo("UTC")) + time_difference).replace(hour=0, minute=50)
+        else:
+            current_time = datetime.now(ZoneInfo("UTC")) + time_difference
         suggestions = []
 
         for minutes in [60, 45, 30, 15]:
@@ -48,7 +52,8 @@ async def handle_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if minutes_rounded == 60:
                 minutes_rounded = 0
                 hour_rounded += 1
-
+            if hour_rounded == 24:
+                hour_rounded = 0
             suggested_time = datetime.now().replace(hour=hour_rounded, minute=minutes_rounded)
             suggestions.append(suggested_time.strftime("%H:%M"))
         keyboard = [[KeyboardButton(hour)] for hour in suggestions]
@@ -72,24 +77,28 @@ async def handle_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     time_difference = timedelta(hours=data[group]["time_difference"])
 
     try:
+        date = datetime.now().date().strftime("%d-%m-%Y")
         time_str = update.message.text.strip()
         if time_str == "/cancel":
             await update.message.reply_text("❌ Ajout annulé.", reply_markup=ReplyKeyboardRemove())
             return ConversationHandler.END
             
         if time_str.lower() == "/now":
-            time_str = (datetime.now(ZoneInfo("UTC")) + time_difference).strftime("%H:%M")
-        elif time_str.startswith("/"):
-            time_str = time_str[1:]
+            time_str = (datetime.now(ZoneInfo("UTC")) + time_difference).strftime("%d-%m-%Y %H:%M")
+            date = time_str.split(" ")[0]
+            time_str = time_str.split(" ")[1]
+        else:
+            if time_str.startswith("/"):
+                time_str = time_str[1:]
+            date = getValidDate(time_str, data[group]["time_difference"])
             
-        # Vérification du format de l'heure
+        #we check if the time is valid
         if not is_valid_time(time_str):
             await update.message.reply_text(
                 "❌ Format d'heure invalide. Merci d'utiliser le format HH:MM (ex: 14:30)\n"
             )
             return ASK_TIME
 
-        date = datetime.now().date().strftime("%d-%m-%Y")
         timestamp = f"{date} {time_str}"
         amount = context.user_data['amount']
 
