@@ -32,9 +32,9 @@ def load_data():
 
 async def save_data(data, context):
     for group in data:
-        if len(data[group]["entries"]) > 10:
+        if "entries" in data[group] and len(data[group]["entries"]) > 10:
             data[group]["entries"] = data[group]["entries"][-10:]
-        if len(data[group]["poop"]) > 5:
+        if "poop" in data[group] and len(data[group]["poop"]) > 5:
             data[group]["poop"] = data[group]["poop"][-5:]
     with open(DATA_FILE, 'w') as file:
         json.dump(data, file, indent=2)
