@@ -20,6 +20,6 @@ async def join(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if old_group:
         data[old_group]["users"].remove(user_id)
     data[group_name]["users"].append(user_id)
-    data[group_name]["time_difference"] = timedelta(0)
+    data[group_name]["time_difference"] = 0
     await save_data(data, context)
     await update.message.reply_text(f"✅ Tu as rejoint le groupe {group_name}.")

@@ -30,7 +30,9 @@ if not TEST_MODE and not all([TELEGRAM_API_ID, TELEGRAM_API_HASH, BACKUP_CHANNEL
 def load_data():
     try:
         with open(DATA_FILE, 'r') as file:
-            return json.load(file)
+            data = json.load(file)
+            # Nettoyer les données pour s'assurer que time_difference est un nombre
+            return clean_data(data)
     except FileNotFoundError:
         return {}
 
@@ -100,7 +102,7 @@ def find_group_for_user(data, user_id):
 
 def create_personal_group(data, user_id):
     group_name = f"group_{user_id}"
-    data[group_name] = {"users": [user_id], "entries": [], "time_difference": timedelta(0)}
+    data[group_name] = {"users": [user_id], "entries": [], "time_difference": 0}
     return group_name
 
 def load_backup_from_channel():
@@ -237,4 +239,13 @@ def run_daily_cleanup():
     """Run cleanup if it's a new day"""
     if should_run_cleanup():
         cleanup_old_data()
+
+def clean_data(data):
+    """Nettoie les données pour s'assurer que time_difference est toujours un nombre"""
+    for group_name, group_data in data.items():
+        if isinstance(group_data, dict) and "time_difference" in group_data:
+            # Si time_difference n'est pas un nombre, le convertir en 0
+            if not isinstance(group_data["time_difference"], (int, float)):
+                group_data["time_difference"] = 0
+    return data
 
