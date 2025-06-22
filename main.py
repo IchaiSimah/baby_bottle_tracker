@@ -258,15 +258,6 @@ def main():
     print("Initializing bot...")
     app = ApplicationBuilder().token(TOKEN).post_init(set_commands).build()
 
-    # Load backup before setting up handlers
-    print("Loading backup...")
-    try:
-        from utils import load_backup_from_channel
-        load_backup_from_channel()
-        print("Backup loaded successfully")
-    except Exception as e:
-        print(f"Warning: Could not load backup: {e}")
-
     print("Setting up bot...")
     
     # Add bottle conversation handler
