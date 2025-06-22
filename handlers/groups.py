@@ -71,19 +71,13 @@ async def handle_group_actions(update: Update, context: ContextTypes.DEFAULT_TYP
         await show_create_group(update, context)
     elif action == "leave":
         await leave_group(update, context, current_group)
+        return
 
     # Clear conversation state for other states
-    if action != 'group_join':
+    if action not in ['join', 'create', 'rename']:
         context.user_data.pop('conversation_state', None)
 
-    # Handle group join text input
-    if action == 'group_join':
-        from handlers.groups import join_group
-        await join_group(update, context, query.data.split('_')[1])
-
     await save_data(data, context)
-
-    await show_groups_menu(update, context)
 
 async def show_rename_group(update: Update, context: ContextTypes.DEFAULT_TYPE, current_group: str):
     """Show rename group interface"""
@@ -239,19 +233,20 @@ async def rename_group(update: Update, context: ContextTypes.DEFAULT_TYPE, curre
     
     await save_data(data, context)
     
-    message = f"✅ **Groupe renommé !**\n\n`{current_group}` → `{new_name}`"
-    keyboard = [[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]]
+    # Return to main menu with success message
+    from handlers.queries import get_main_message_content
+    user_id = update.effective_user.id
+    group = find_group_for_user(data, user_id)
+    message_text, main_keyboard = get_main_message_content(data, group)
     
     if query:
         await query.edit_message_text(
-            message,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            text=message_text,
+            reply_markup=main_keyboard,
+            parse_mode="Markdown"
         )
     else:
-        # For text input, return to main
-        from handlers.queries import get_main_message_content
-        group = find_group_for_user(data, update.effective_user.id)
-        message_text, main_keyboard = get_main_message_content(data, group)
+        # For text input, update main message
         message_id = context.user_data.get('main_message_id')
         chat_id = context.user_data.get('chat_id')
         if message_id and chat_id:
@@ -366,20 +361,19 @@ async def join_group(update: Update, context: ContextTypes.DEFAULT_TYPE, target_
     
     await save_data(data, context)
     
-    member_count = len(data[target_group]["users"])
-    message = f"✅ **Groupe rejoint !**\n\nVous avez rejoint `{target_group}`\nMembres : {member_count}"
-    keyboard = [[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]]
+    # Return to main menu
+    from handlers.queries import get_main_message_content
+    group = find_group_for_user(data, user_id)
+    message_text, main_keyboard = get_main_message_content(data, group)
     
     if query:
         await query.edit_message_text(
-            message,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            text=message_text,
+            reply_markup=main_keyboard,
+            parse_mode="Markdown"
         )
     else:
-        # For text input, return to main
-        from handlers.queries import get_main_message_content
-        group = find_group_for_user(data, user_id)
-        message_text, main_keyboard = get_main_message_content(data, group)
+        # For text input, update main message
         message_id = context.user_data.get('main_message_id')
         chat_id = context.user_data.get('chat_id')
         if message_id and chat_id:
@@ -501,19 +495,19 @@ async def create_new_group(update: Update, context: ContextTypes.DEFAULT_TYPE, n
     
     await save_data(data, context)
     
-    message = f"✅ **Groupe créé !**\n\nNouveau groupe : `{new_name}`\nVous en êtes le premier membre."
-    keyboard = [[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]]
+    # Return to main menu
+    from handlers.queries import get_main_message_content
+    group = find_group_for_user(data, user_id)
+    message_text, main_keyboard = get_main_message_content(data, group)
     
     if query:
         await query.edit_message_text(
-            message,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            text=message_text,
+            reply_markup=main_keyboard,
+            parse_mode="Markdown"
         )
     else:
-        # For text input, return to main
-        from handlers.queries import get_main_message_content
-        group = find_group_for_user(data, user_id)
-        message_text, main_keyboard = get_main_message_content(data, group)
+        # For text input, update main message
         message_id = context.user_data.get('main_message_id')
         chat_id = context.user_data.get('chat_id')
         if message_id and chat_id:
@@ -566,19 +560,19 @@ async def leave_group(update: Update, context: ContextTypes.DEFAULT_TYPE, curren
     
     await save_data(data, context)
     
-    message = f"✅ **Groupe quitté !**\n\nVous êtes maintenant dans votre groupe personnel : `{personal_group}`"
-    keyboard = [[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]]
+    # Return to main menu
+    from handlers.queries import get_main_message_content
+    group = find_group_for_user(data, user_id)
+    message_text, main_keyboard = get_main_message_content(data, group)
     
     if query:
         await query.edit_message_text(
-            message,
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            text=message_text,
+            reply_markup=main_keyboard,
+            parse_mode="Markdown"
         )
     else:
-        # For text input, return to main
-        from handlers.queries import get_main_message_content
-        group = find_group_for_user(data, user_id)
-        message_text, main_keyboard = get_main_message_content(data, group)
+        # For text input, update main message
         message_id = context.user_data.get('main_message_id')
         chat_id = context.user_data.get('chat_id')
         if message_id and chat_id:
