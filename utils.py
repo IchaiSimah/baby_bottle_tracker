@@ -122,7 +122,6 @@ def load_backup_from_channel():
                     json.dump(data, file_out, indent=2)
                     
                 print("✅ Backup loaded successfully")
-                client.send_message(int(BACKUP_CHANNEL_ID), "✅ Backup chargé avec succès.")
             else:
                 print("❌ Aucun document trouvé dans le canal.")
 
