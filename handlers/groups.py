@@ -72,6 +72,19 @@ async def handle_group_actions(update: Update, context: ContextTypes.DEFAULT_TYP
     elif action == "leave":
         await leave_group(update, context, current_group)
 
+    # Clear conversation state for other states
+    if action != 'group_join':
+        context.user_data.pop('conversation_state', None)
+
+    # Handle group join text input
+    if action == 'group_join':
+        from handlers.groups import join_group
+        await join_group(update, context, query.data.split('_')[1])
+
+    await save_data(data, context)
+
+    await show_groups_menu(update, context)
+
 async def show_rename_group(update: Update, context: ContextTypes.DEFAULT_TYPE, current_group: str):
     """Show rename group interface"""
     query = update.callback_query
@@ -157,7 +170,7 @@ async def rename_group(update: Update, context: ContextTypes.DEFAULT_TYPE, curre
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
         else:
-            # For text input, we need to get the main message and edit it
+            # For text input, return to main
             from handlers.queries import get_main_message_content
             data = load_data()
             user_id = update.effective_user.id
@@ -592,38 +605,4 @@ def is_valid_group_name(name: str) -> bool:
     
     # Allow letters, numbers, spaces, and hyphens
     pattern = r'^[a-zA-Z0-9\s\-]+$'
-    return bool(re.match(pattern, name))
-
-async def handle_group_actions(update: Update, context: ContextTypes.DEFAULT_TYPE, action: str = None):
-    """Handle group management actions"""
-    query = update.callback_query
-    await query.answer()
-    
-    if not action:
-        action = query.data.replace("group_", "")
-    
-    user_id = update.effective_user.id
-    data = load_data()
-    current_group = find_group_for_user(data, user_id)
-    
-    if action == "rename":
-        await show_rename_group(update, context, current_group)
-    elif action == "join":
-        await show_join_group(update, context)
-    elif action == "create":
-        await show_create_group(update, context)
-    elif action == "leave":
-        await leave_group(update, context, current_group)
-
-    # Clear conversation state for other states
-    if action != 'group_join':
-        context.user_data.pop('conversation_state', None)
-
-    # Handle group join text input
-    if action == 'group_join':
-        from handlers.groups import join_group
-        await join_group(update, context, query.data.split('_')[1])
-
-    await save_data(data, context)
-
-    await show_groups_menu(update, context) 
+    return bool(re.match(pattern, name)) 

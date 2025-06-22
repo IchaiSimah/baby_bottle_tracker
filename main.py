@@ -180,7 +180,7 @@ async def error_handler(update, context):
     print(error_text)
     
     if update and update.effective_message:
-        await update.effective_message.reply_text("❌ Une erreur s'est produite. Veuillez réessayer.")
+        await update.effective_message.reply_text("❌ Une erreur s'est produite. Veuillez réessayer. Erreur: " + str(context.error))
 
 async def set_commands(app):
     commands = [

@@ -1,8 +1,6 @@
 import json
-from telethon.sync import TelegramClient
 import os
 from dotenv import load_dotenv
-from telethon.sessions import StringSession
 from datetime import datetime, time, timedelta
 from config import TEST_MODE
 from zoneinfo import ZoneInfo
@@ -21,12 +19,13 @@ SESSION_STRING = os.getenv("STRING_SESSION")
 last_cleanup_date = None
 cleanup_lock = threading.Lock()
 
-if not all([TELEGRAM_API_ID, TELEGRAM_API_HASH, BACKUP_CHANNEL_ID]):
+# Only check for backup variables if we're not in test mode
+if not TEST_MODE and not all([TELEGRAM_API_ID, TELEGRAM_API_HASH, BACKUP_CHANNEL_ID]):
     missing = []
     if not TELEGRAM_API_ID: missing.append("TELEGRAM_API_ID")
     if not TELEGRAM_API_HASH: missing.append("TELEGRAM_API_HASH")
     if not BACKUP_CHANNEL_ID: missing.append("BACKUP_CHANNEL_ID")
-    raise ValueError(f"Missing required environment variables: {', '.join(missing)}")
+    print(f"Warning: Missing backup environment variables: {', '.join(missing)}")
 
 def load_data():
     try:
@@ -106,6 +105,10 @@ def create_personal_group(data, user_id):
 
 def load_backup_from_channel():
     try:
+        # Import Telethon only when needed
+        from telethon.sync import TelegramClient
+        from telethon.sessions import StringSession
+        
         print("Connecting to Telegram...")
         with TelegramClient(StringSession(SESSION_STRING), int(TELEGRAM_API_ID), TELEGRAM_API_HASH) as client:
             print("Fetching latest backup...")
