@@ -9,7 +9,7 @@ from handlers.stats import show_stats
 from handlers.settings import show_settings, handle_settings
 from handlers.groups import show_groups_menu, handle_group_actions, create_new_group, join_group
 from handlers.queries import get_main_message_content
-from utils import load_data, save_data, find_group_for_user, create_personal_group
+from utils import load_data, save_data, find_group_for_user, create_personal_group, load_backup_from_channel
 from config import TEST_MODE
 
 import sys
@@ -257,6 +257,10 @@ def main():
 
     print("Initializing bot...")
     app = ApplicationBuilder().token(TOKEN).post_init(set_commands).build()
+    # Load backup before setting up handlers
+    
+    print("Loading backup...")
+    load_backup_from_channel()
 
     print("Setting up bot...")
     
