@@ -163,13 +163,24 @@ async def rename_group(update: Update, context: ContextTypes.DEFAULT_TYPE, curre
             user_id = update.effective_user.id
             group = find_group_for_user(data, user_id)
             message_text, main_keyboard = get_main_message_content(data, group)
-            await context.bot.edit_message_text(
-                chat_id=context.user_data.get('chat_id'),
-                message_id=context.user_data.get('main_message_id'),
-                text=message_text,
-                reply_markup=main_keyboard,
-                parse_mode="Markdown"
-            )
+            message_id = context.user_data.get('main_message_id')
+            chat_id = context.user_data.get('chat_id')
+            if message_id and chat_id:
+                await context.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=message_text,
+                    reply_markup=main_keyboard,
+                    parse_mode="Markdown"
+                )
+            else:
+                sent = await update.message.reply_text(
+                    text=message_text,
+                    reply_markup=main_keyboard,
+                    parse_mode="Markdown"
+                )
+                context.user_data['main_message_id'] = sent.message_id
+                context.user_data['chat_id'] = sent.chat_id
         return
     
     data = load_data()
@@ -189,13 +200,24 @@ async def rename_group(update: Update, context: ContextTypes.DEFAULT_TYPE, curre
             from handlers.queries import get_main_message_content
             group = find_group_for_user(data, update.effective_user.id)
             message_text, main_keyboard = get_main_message_content(data, group)
-            await context.bot.edit_message_text(
-                chat_id=context.user_data.get('chat_id'),
-                message_id=context.user_data.get('main_message_id'),
-                text=message_text,
-                reply_markup=main_keyboard,
-                parse_mode="Markdown"
-            )
+            message_id = context.user_data.get('main_message_id')
+            chat_id = context.user_data.get('chat_id')
+            if message_id and chat_id:
+                await context.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=message_text,
+                    reply_markup=main_keyboard,
+                    parse_mode="Markdown"
+                )
+            else:
+                sent = await update.message.reply_text(
+                    text=message_text,
+                    reply_markup=main_keyboard,
+                    parse_mode="Markdown"
+                )
+                context.user_data['main_message_id'] = sent.message_id
+                context.user_data['chat_id'] = sent.chat_id
         return
     
     # Rename the group
@@ -217,13 +239,24 @@ async def rename_group(update: Update, context: ContextTypes.DEFAULT_TYPE, curre
         from handlers.queries import get_main_message_content
         group = find_group_for_user(data, update.effective_user.id)
         message_text, main_keyboard = get_main_message_content(data, group)
-        await context.bot.edit_message_text(
-            chat_id=context.user_data.get('chat_id'),
-            message_id=context.user_data.get('main_message_id'),
-            text=message_text,
-            reply_markup=main_keyboard,
-            parse_mode="Markdown"
-        )
+        message_id = context.user_data.get('main_message_id')
+        chat_id = context.user_data.get('chat_id')
+        if message_id and chat_id:
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=message_text,
+                reply_markup=main_keyboard,
+                parse_mode="Markdown"
+            )
+        else:
+            sent = await update.message.reply_text(
+                text=message_text,
+                reply_markup=main_keyboard,
+                parse_mode="Markdown"
+            )
+            context.user_data['main_message_id'] = sent.message_id
+            context.user_data['chat_id'] = sent.chat_id
 
 async def join_group(update: Update, context: ContextTypes.DEFAULT_TYPE, target_group: str):
     """Join an existing group"""
@@ -253,13 +286,24 @@ async def join_group(update: Update, context: ContextTypes.DEFAULT_TYPE, target_
             from handlers.queries import get_main_message_content
             group = find_group_for_user(data, user_id)
             message_text, main_keyboard = get_main_message_content(data, group)
-            await context.bot.edit_message_text(
-                chat_id=context.user_data.get('chat_id'),
-                message_id=context.user_data.get('main_message_id'),
-                text=message_text,
-                reply_markup=main_keyboard,
-                parse_mode="Markdown"
-            )
+            message_id = context.user_data.get('main_message_id')
+            chat_id = context.user_data.get('chat_id')
+            if message_id and chat_id:
+                await context.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=message_text,
+                    reply_markup=main_keyboard,
+                    parse_mode="Markdown"
+                )
+            else:
+                sent = await update.message.reply_text(
+                    text=message_text,
+                    reply_markup=main_keyboard,
+                    parse_mode="Markdown"
+                )
+                context.user_data['main_message_id'] = sent.message_id
+                context.user_data['chat_id'] = sent.chat_id
         return
     
     # Check if user is already in this group
@@ -277,13 +321,24 @@ async def join_group(update: Update, context: ContextTypes.DEFAULT_TYPE, target_
             from handlers.queries import get_main_message_content
             group = find_group_for_user(data, user_id)
             message_text, main_keyboard = get_main_message_content(data, group)
-            await context.bot.edit_message_text(
-                chat_id=context.user_data.get('chat_id'),
-                message_id=context.user_data.get('main_message_id'),
-                text=message_text,
-                reply_markup=main_keyboard,
-                parse_mode="Markdown"
-            )
+            message_id = context.user_data.get('main_message_id')
+            chat_id = context.user_data.get('chat_id')
+            if message_id and chat_id:
+                await context.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=message_text,
+                    reply_markup=main_keyboard,
+                    parse_mode="Markdown"
+                )
+            else:
+                sent = await update.message.reply_text(
+                    text=message_text,
+                    reply_markup=main_keyboard,
+                    parse_mode="Markdown"
+                )
+                context.user_data['main_message_id'] = sent.message_id
+                context.user_data['chat_id'] = sent.chat_id
         return
     
     # Remove user from current group
@@ -312,13 +367,24 @@ async def join_group(update: Update, context: ContextTypes.DEFAULT_TYPE, target_
         from handlers.queries import get_main_message_content
         group = find_group_for_user(data, user_id)
         message_text, main_keyboard = get_main_message_content(data, group)
-        await context.bot.edit_message_text(
-            chat_id=context.user_data.get('chat_id'),
-            message_id=context.user_data.get('main_message_id'),
-            text=message_text,
-            reply_markup=main_keyboard,
-            parse_mode="Markdown"
-        )
+        message_id = context.user_data.get('main_message_id')
+        chat_id = context.user_data.get('chat_id')
+        if message_id and chat_id:
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=message_text,
+                reply_markup=main_keyboard,
+                parse_mode="Markdown"
+            )
+        else:
+            sent = await update.message.reply_text(
+                text=message_text,
+                reply_markup=main_keyboard,
+                parse_mode="Markdown"
+            )
+            context.user_data['main_message_id'] = sent.message_id
+            context.user_data['chat_id'] = sent.chat_id
 
 async def create_new_group(update: Update, context: ContextTypes.DEFAULT_TYPE, new_name: str):
     """Create a new group"""
@@ -346,13 +412,24 @@ async def create_new_group(update: Update, context: ContextTypes.DEFAULT_TYPE, n
             user_id = update.effective_user.id
             group = find_group_for_user(data, user_id)
             message_text, main_keyboard = get_main_message_content(data, group)
-            await context.bot.edit_message_text(
-                chat_id=context.user_data.get('chat_id'),
-                message_id=context.user_data.get('main_message_id'),
-                text=message_text,
-                reply_markup=main_keyboard,
-                parse_mode="Markdown"
-            )
+            message_id = context.user_data.get('main_message_id')
+            chat_id = context.user_data.get('chat_id')
+            if message_id and chat_id:
+                await context.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=message_text,
+                    reply_markup=main_keyboard,
+                    parse_mode="Markdown"
+                )
+            else:
+                sent = await update.message.reply_text(
+                    text=message_text,
+                    reply_markup=main_keyboard,
+                    parse_mode="Markdown"
+                )
+                context.user_data['main_message_id'] = sent.message_id
+                context.user_data['chat_id'] = sent.chat_id
         return
     
     data = load_data()
@@ -374,13 +451,24 @@ async def create_new_group(update: Update, context: ContextTypes.DEFAULT_TYPE, n
             from handlers.queries import get_main_message_content
             group = find_group_for_user(data, user_id)
             message_text, main_keyboard = get_main_message_content(data, group)
-            await context.bot.edit_message_text(
-                chat_id=context.user_data.get('chat_id'),
-                message_id=context.user_data.get('main_message_id'),
-                text=message_text,
-                reply_markup=main_keyboard,
-                parse_mode="Markdown"
-            )
+            message_id = context.user_data.get('main_message_id')
+            chat_id = context.user_data.get('chat_id')
+            if message_id and chat_id:
+                await context.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    text=message_text,
+                    reply_markup=main_keyboard,
+                    parse_mode="Markdown"
+                )
+            else:
+                sent = await update.message.reply_text(
+                    text=message_text,
+                    reply_markup=main_keyboard,
+                    parse_mode="Markdown"
+                )
+                context.user_data['main_message_id'] = sent.message_id
+                context.user_data['chat_id'] = sent.chat_id
         return
     
     # Remove user from current group
@@ -413,13 +501,24 @@ async def create_new_group(update: Update, context: ContextTypes.DEFAULT_TYPE, n
         from handlers.queries import get_main_message_content
         group = find_group_for_user(data, user_id)
         message_text, main_keyboard = get_main_message_content(data, group)
-        await context.bot.edit_message_text(
-            chat_id=context.user_data.get('chat_id'),
-            message_id=context.user_data.get('main_message_id'),
-            text=message_text,
-            reply_markup=main_keyboard,
-            parse_mode="Markdown"
-        )
+        message_id = context.user_data.get('main_message_id')
+        chat_id = context.user_data.get('chat_id')
+        if message_id and chat_id:
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=message_text,
+                reply_markup=main_keyboard,
+                parse_mode="Markdown"
+            )
+        else:
+            sent = await update.message.reply_text(
+                text=message_text,
+                reply_markup=main_keyboard,
+                parse_mode="Markdown"
+            )
+            context.user_data['main_message_id'] = sent.message_id
+            context.user_data['chat_id'] = sent.chat_id
 
 async def leave_group(update: Update, context: ContextTypes.DEFAULT_TYPE, current_group: str):
     """Leave current group and return to personal group"""
@@ -467,13 +566,24 @@ async def leave_group(update: Update, context: ContextTypes.DEFAULT_TYPE, curren
         from handlers.queries import get_main_message_content
         group = find_group_for_user(data, user_id)
         message_text, main_keyboard = get_main_message_content(data, group)
-        await context.bot.edit_message_text(
-            chat_id=context.user_data.get('chat_id'),
-            message_id=context.user_data.get('main_message_id'),
-            text=message_text,
-            reply_markup=main_keyboard,
-            parse_mode="Markdown"
-        )
+        message_id = context.user_data.get('main_message_id')
+        chat_id = context.user_data.get('chat_id')
+        if message_id and chat_id:
+            await context.bot.edit_message_text(
+                chat_id=chat_id,
+                message_id=message_id,
+                text=message_text,
+                reply_markup=main_keyboard,
+                parse_mode="Markdown"
+            )
+        else:
+            sent = await update.message.reply_text(
+                text=message_text,
+                reply_markup=main_keyboard,
+                parse_mode="Markdown"
+            )
+            context.user_data['main_message_id'] = sent.message_id
+            context.user_data['chat_id'] = sent.chat_id
 
 def is_valid_group_name(name: str) -> bool:
     """Validate group name format"""
@@ -482,4 +592,38 @@ def is_valid_group_name(name: str) -> bool:
     
     # Allow letters, numbers, spaces, and hyphens
     pattern = r'^[a-zA-Z0-9\s\-]+$'
-    return bool(re.match(pattern, name)) 
+    return bool(re.match(pattern, name))
+
+async def handle_group_actions(update: Update, context: ContextTypes.DEFAULT_TYPE, action: str = None):
+    """Handle group management actions"""
+    query = update.callback_query
+    await query.answer()
+    
+    if not action:
+        action = query.data.replace("group_", "")
+    
+    user_id = update.effective_user.id
+    data = load_data()
+    current_group = find_group_for_user(data, user_id)
+    
+    if action == "rename":
+        await show_rename_group(update, context, current_group)
+    elif action == "join":
+        await show_join_group(update, context)
+    elif action == "create":
+        await show_create_group(update, context)
+    elif action == "leave":
+        await leave_group(update, context, current_group)
+
+    # Clear conversation state for other states
+    if action != 'group_join':
+        context.user_data.pop('conversation_state', None)
+
+    # Handle group join text input
+    if action == 'group_join':
+        from handlers.groups import join_group
+        await join_group(update, context, query.data.split('_')[1])
+
+    await save_data(data, context)
+
+    await show_groups_menu(update, context) 
