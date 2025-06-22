@@ -1,5 +1,5 @@
 from datetime import datetime
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from utils import load_data, find_group_for_user
@@ -12,6 +12,59 @@ def format_time(time: str) -> str:
     minute = time_parts[1]
     return f"{hour}:{minute} le {date_parts[0]}-{date_parts[1]}"
 
+def get_main_message_content(data, group):
+    """Generate the main message content with last 5 bottles and last poop"""
+    entries = data[group].get("entries", [])
+    poop = data[group].get("poop", [])
+    
+    # Get display settings
+    bottles_to_show = data[group].get("bottles_to_show", 5)
+    poops_to_show = data[group].get("poops_to_show", 1)
+    
+    message = "🍼 **Baby Bottle Tracker**\n\n"
+    
+    # Show last bottles
+    if entries:
+        last_entries = entries[-bottles_to_show:]
+        message += f"**Derniers biberons:**\n"
+        for i, entry in enumerate(reversed(last_entries), 1):
+            formatted_time = format_time(entry['time'])
+            amount = f"{entry['amount']:>3}ml"
+            message += f"`{i}. {amount} à {formatted_time}`\n"
+    else:
+        message += "**Aucun biberon enregistré**\n"
+    
+    message += "\n"
+    
+    # Show last poop(s)
+    if poop:
+        last_poops = poop[-poops_to_show:]
+        message += f"**Dernier{'s' if poops_to_show > 1 else ''} caca{'s' if poops_to_show > 1 else ''}:**\n"
+        for i, poop_entry in enumerate(reversed(last_poops), 1):
+            formatted_time = format_time(poop_entry['time'])
+            message += f"`{i}. {formatted_time}"
+            if poop_entry.get('info'):
+                message += f" - {poop_entry['info']}"
+            message += "`\n"
+    else:
+        message += "**Aucun caca enregistré**\n"
+    
+    # Create inline keyboard
+    keyboard = [
+        [
+            InlineKeyboardButton("🍼 Ajouter", callback_data="add_bottle"),
+            InlineKeyboardButton("❌ Supprimer", callback_data="remove_bottle")
+        ],
+        [
+            InlineKeyboardButton("💩 Caca", callback_data="add_poop"),
+            InlineKeyboardButton("📊 Stats", callback_data="stats")
+        ],
+        [
+            InlineKeyboardButton("⚙️ Paramètres", callback_data="settings")
+        ]
+    ]
+    
+    return message, InlineKeyboardMarkup(keyboard)
 
 async def last(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id

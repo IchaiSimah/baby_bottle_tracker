@@ -1,14 +1,13 @@
 from datetime import datetime, timedelta
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
-from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, filters
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, filters, CallbackQueryHandler
 from zoneinfo import ZoneInfo
 from utils import load_data, save_data, find_group_for_user, create_personal_group, is_valid_time, getValidDate
+from config import TEST_MODE
 
-ASK_TIME_POOP, ASK_INFO_POOP = range(2)
-
+ASK_POOP_TIME, ASK_POOP_INFO = range(2)
 
 def round_to_nearest_quarter_hour(minutes, base=15):
-
     fraction = minutes % base
     if fraction == 0:
         return minutes  
@@ -18,97 +17,324 @@ def round_to_nearest_quarter_hour(minutes, base=15):
         rounded = minutes + (base - fraction)
     return int(rounded)
 
-async def poop(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def add_poop(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Start the add poop flow - show time selection"""
+    query = update.callback_query
+    await query.answer()
+    
     data = load_data()
     user_id = update.effective_user.id
     group = find_group_for_user(data, user_id)
     if not group:
         group = create_personal_group(data, user_id)
-    if not "time_difference" in data[group]:
-        data[group]["time_difference"] = 0
+        await save_data(data, context)
+    
+    time_difference = timedelta(hours=data[group].get("time_difference", 0))
+    
+    # Generate time suggestions
 
-    message = f"À quelle heure a t il fait un caca 💩?  Ou tapez /now pour l'heure actuelle."
-    await update.message.reply_text(message)
-    return ASK_TIME_POOP
+    current_time = datetime.now(ZoneInfo("UTC")) + time_difference
+    
+    suggestions = []
+    for minutes in [60, 45, 30, 15]:
+        suggestion_time = current_time - timedelta(minutes=minutes)
+        minutes_rounded = round_to_nearest_quarter_hour(suggestion_time.minute)
+        hour_rounded = suggestion_time.hour
+        if minutes_rounded == 60:
+            minutes_rounded = 0
+            hour_rounded += 1
+        if hour_rounded == 24:
+            hour_rounded = 0
+        suggested_time = datetime.now().replace(hour=hour_rounded, minute=minutes_rounded)
+        suggestions.append(suggested_time.strftime("%H:%M"))
+    
+    # Create keyboard with time buttons
+    keyboard = []
+    for time_str in suggestions:
+        keyboard.append([InlineKeyboardButton(time_str, callback_data=f"poop_time_{time_str}")])
+    
+    # Add "Now" and "Cancel" buttons
+    keyboard.append([
+        InlineKeyboardButton("🕐 Maintenant", callback_data="poop_time_now"),
+        InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+    ])
+    
+    message = "⏰ **Choisissez l'heure du caca:**\n\n*Ou tapez une heure manuellement (ex: 14:30)*"
+    
+    # Set conversation state for text input
+    context.user_data['conversation_state'] = 'poop_time'
+    
+    await query.edit_message_text(
+        text=message,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="Markdown"
+    )
+    
+    return ASK_POOP_TIME
 
-
-
-async def handle_time_poop(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_poop_time(update: Update, context: ContextTypes.DEFAULT_TYPE, time_str: str = None):
+    """Handle time selection and ask for additional info"""
+    # Check if this is a callback query or text message
+    if hasattr(update, 'callback_query') and update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        if not time_str:
+            # Extract time from callback data
+            time_str = query.data.replace("poop_time_", "")
+    else:
+        # This is a text message
+        query = None
+        if not time_str:
+            time_str = update.message.text.strip()
     data = load_data()
     user_id = update.effective_user.id
     group = find_group_for_user(data, user_id)
-    time_difference = timedelta(hours=data[group]["time_difference"])
+    time_difference = timedelta(hours=data[group].get("time_difference", 0))
     try:
-        time_str = update.message.text.strip()
-        if time_str == "/cancel":
-            await update.message.reply_text("❌ Ajout annulé.", reply_markup = ReplyKeyboardRemove())
-            return ConversationHandler.END
-        if time_str.lower() == "/now":
+        if time_str.lower() == "now":
             time_str = (datetime.now(ZoneInfo("UTC")) + time_difference).strftime("%d-%m-%Y %H:%M")
             date = time_str.split(" ")[0]
             time_str = time_str.split(" ")[1]
         else:
-            if time_str.startswith("/"):
-                time_str = time_str[1:]
-            date = getValidDate(time_str, data[group]["time_difference"])
-
-        #we check if the time is valid
+            date = getValidDate(time_str, data[group].get("time_difference", 0))
+        # Validate time format
         if not is_valid_time(time_str):
-            await update.message.reply_text(
-                "❌ Format d'heure invalide. Merci d'utiliser le format HH:MM (ex: 14:30)\n"
+            error_msg = "❌ Format d'heure invalide. Veuillez réessayer."
+            if query:
+                await query.edit_message_text(
+                    error_msg,
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+                    ]])
+                )
+            else:
+                message_id = context.user_data.get('main_message_id')
+                chat_id = context.user_data.get('chat_id')
+                if message_id and chat_id:
+                    await context.bot.edit_message_text(
+                        error_msg,
+                        chat_id=chat_id,
+                        message_id=message_id,
+                        reply_markup=InlineKeyboardMarkup([[
+                            InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+                        ]])
+                    )
+                else:
+                    sent = await update.message.reply_text(error_msg)
+                    context.user_data['main_message_id'] = sent.message_id
+                    context.user_data['chat_id'] = sent.chat_id
+            return ASK_POOP_TIME
+        # Store time in context
+        context.user_data['poop_time'] = f"{date} {time_str}"
+        # Ask for additional info with predefined options
+        keyboard = [
+            [InlineKeyboardButton("✅ Terminer", callback_data="poop_info_none")],
+            [InlineKeyboardButton("❌ Annuler", callback_data="cancel")]
+        ]
+        message = f"💩 **Caca enregistré à {time_str}**\n\nCliquez sur 'Terminer' pour enregistrer sans information supplémentaire.\n\n*Ou tapez une information.*"
+        
+        # Set conversation state for text input
+        context.user_data['conversation_state'] = 'poop_info'
+        
+        if query:
+            await query.edit_message_text(
+                text=message,
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="Markdown"
             )
-            return ASK_TIME_POOP
+        else:
+            message_id = context.user_data.get('main_message_id')
+            chat_id = context.user_data.get('chat_id')
+            if message_id and chat_id:
+                await context.bot.edit_message_text(
+                    text=message,
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode="Markdown"
+                )
+            else:
+                sent = await update.message.reply_text(
+                    text=message,
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode="Markdown"
+                )
+                context.user_data['main_message_id'] = sent.message_id
+                context.user_data['chat_id'] = sent.chat_id
+        return ASK_POOP_INFO
+    except Exception as e:
+        error_msg = f"❌ Erreur: {str(e)}"
+        if query:
+            await query.edit_message_text(
+                error_msg,
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+                ]])
+            )
+        else:
+            message_id = context.user_data.get('main_message_id')
+            chat_id = context.user_data.get('chat_id')
+            if message_id and chat_id:
+                await context.bot.edit_message_text(
+                    error_msg,
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+                    ]])
+                )
+            else:
+                sent = await update.message.reply_text(error_msg)
+                context.user_data['main_message_id'] = sent.message_id
+                context.user_data['chat_id'] = sent.chat_id
+        return ConversationHandler.END
 
-        await update.message.reply_text("information additionnelle? (optionnel) /no pour passer")
-        context.user_data['time'] = f"{date} {time_str}"
-        return ASK_INFO_POOP
-    except ValueError as e:
-        await update.message.reply_text("❌ Format d'heure invalide, merci de saisir HH:MM ou /now.")
-        print(e)
-        return ASK_TIME_POOP
+async def handle_poop_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle additional info selection and save the poop entry"""
+    # Check if this is a callback query or text message
+    if hasattr(update, 'callback_query') and update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        # Extract info from callback data
+        info = query.data.replace("poop_info_", "")
+        if info == "none":
+            info = None
+    else:
+        # This is a text message
+        query = None
+        info = update.message.text.strip()
+    
+    try:
+        timestamp = context.user_data.get('poop_time')
+        
+        if not timestamp:
+            error_msg = "❌ Erreur: temps non trouvé. Veuillez recommencer."
+            if query:
+                await query.edit_message_text(
+                    error_msg,
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+                    ]])
+                )
+            else:
+                # Edit main message if possible
+                message_id = context.user_data.get('main_message_id')
+                chat_id = context.user_data.get('chat_id')
+                if message_id and chat_id:
+                    await context.bot.edit_message_text(
+                        error_msg,
+                        chat_id=chat_id,
+                        message_id=message_id,
+                        reply_markup=InlineKeyboardMarkup([[
+                            InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+                        ]])
+                    )
+                else:
+                    sent = await update.message.reply_text(error_msg)
+                    context.user_data['main_message_id'] = sent.message_id
+                    context.user_data['chat_id'] = sent.chat_id
+            return ConversationHandler.END
+        
+        # Save the poop entry
+        data = load_data()
+        user_id = update.effective_user.id
+        group = find_group_for_user(data, user_id)
+        
+        if "poop" not in data[group]:
+            data[group]["poop"] = []
+        
+        data[group]["poop"].append({
+            "time": timestamp,
+            "info": info
+        })
+        
+        await save_data(data, context)
+        
+        # Show success message and return to main
+        from handlers.queries import get_main_message_content
+        message_text, keyboard = get_main_message_content(data, group)
+        
+        success_text = f"✅ **Caca enregistré à {timestamp.split(' ')[1]} !**"
+        if info:
+            success_text += f"\nInfo: {info}"
+        success_text += f"\n\n{message_text}"
+        
+        if query:
+            await query.edit_message_text(
+                text=success_text,
+                reply_markup=keyboard,
+                parse_mode="Markdown"
+            )
+        else:
+            # Edit main message if possible
+            message_id = context.user_data.get('main_message_id')
+            chat_id = context.user_data.get('chat_id')
+            if message_id and chat_id:
+                await context.bot.edit_message_text(
+                    text=success_text,
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+            else:
+                sent = await update.message.reply_text(
+                    text=success_text,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+                context.user_data['main_message_id'] = sent.message_id
+                context.user_data['chat_id'] = sent.chat_id
+        
+        return ConversationHandler.END
+        
+    except Exception as e:
+        error_msg = f"❌ Erreur: {str(e)}"
+        if query:
+            await query.edit_message_text(
+                error_msg,
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+                ]])
+            )
+        else:
+            # Edit main message if possible
+            message_id = context.user_data.get('main_message_id')
+            chat_id = context.user_data.get('chat_id')
+            if message_id and chat_id:
+                await context.bot.edit_message_text(
+                    error_msg,
+                    chat_id=chat_id,
+                    message_id=message_id,
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+                    ]])
+                )
+            else:
+                sent = await update.message.reply_text(error_msg)
+                context.user_data['main_message_id'] = sent.message_id
+                context.user_data['chat_id'] = sent.chat_id
+        return ConversationHandler.END
 
-async def handle_info_poop(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cancel_poop(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Cancel the add poop flow and return to main"""
+    query = update.callback_query
+    await query.answer()
+    
     data = load_data()
     user_id = update.effective_user.id
     group = find_group_for_user(data, user_id)
-
-    info = update.message.text.strip()
-
-    if info == "/cancel":
-        await update.message.reply_text("❌ Ajout annulé.", reply_markup=ReplyKeyboardRemove())
-        return ConversationHandler.END
-
-    if info == "/no":
-        info = None
-    elif info.startswith("/"):
-        await update.message.reply_text(
-            "❌ Format d'information invalide. Merci de saisir une information, /no ou /cancel pour annuler.",
-            reply_markup=ReplyKeyboardRemove()
-        )
-        return ASK_INFO_POOP
-
-    if "time" not in context.user_data:
-        await update.message.reply_text("⛔ Temps introuvable. Veuillez recommencer.")
-        return ConversationHandler.END
-    timestamp = context.user_data['time']
-    if "poop" not in data[group]:
-        data[group]["poop"] = []
     
-    data[group]["poop"].append({
-        "time": timestamp,
-        "info": info
-    })
-
-    await save_data(data, context)
-
-    await update.message.reply_text(
-        f"✅ Caca enregistré à {context.user_data['time'].split(' ')[1]}.",
-        reply_markup=ReplyKeyboardRemove()
+    # Clear conversation state
+    context.user_data.pop('conversation_state', None)
+    
+    from handlers.queries import get_main_message_content
+    message_text, keyboard = get_main_message_content(data, group)
+    
+    await query.edit_message_text(
+        text=message_text,
+        reply_markup=keyboard,
+        parse_mode="Markdown"
     )
-
-    return ConversationHandler.END
-
-
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("❌ Ajout annulé.", reply_markup=ReplyKeyboardRemove())
+    
     return ConversationHandler.END

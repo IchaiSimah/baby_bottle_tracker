@@ -5,3 +5,4 @@ __pycache__
 handlers/__pycache__
 anon.session
 backup_biberons.json
+config.py

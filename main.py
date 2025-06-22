@@ -1,31 +1,24 @@
 import os
 from dotenv import load_dotenv
-from telegram.ext import ApplicationBuilder, CommandHandler, ConversationHandler, MessageHandler, filters
-from telegram import Update, BotCommand
-from handlers.add import add, handle_amount, handle_time, cancel, ASK_AMOUNT, ASK_TIME
-from handlers.poop import poop, handle_time_poop, handle_info_poop, ASK_TIME_POOP, ASK_INFO_POOP
-from handlers.group import join
-from handlers.queries import last, list_biberons_and_poop, total
-from handlers.delete import delete
-from handlers.admin import save_backup, restore_backup
-from handlers.time import time, timeUpdate
-from utils import load_backup_from_channel
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ConversationHandler, ContextTypes
+from telegram import Update, BotCommand, InlineKeyboardButton, InlineKeyboardMarkup
+from handlers.add import add_bottle, handle_bottle_time, handle_bottle_amount, cancel_bottle, ASK_BOTTLE_TIME, ASK_BOTTLE_AMOUNT
+from handlers.poop import add_poop, handle_poop_time, handle_poop_info, cancel_poop, ASK_POOP_TIME, ASK_POOP_INFO
+from handlers.delete import delete_bottle, confirm_delete_bottle, cancel_delete_bottle
+from handlers.stats import show_stats
+from handlers.settings import show_settings, handle_settings
+from handlers.groups import show_groups_menu, handle_group_actions, create_new_group, join_group
+from handlers.queries import get_main_message_content
+from utils import load_data, save_data, find_group_for_user, create_personal_group
 from config import TEST_MODE
 
 import sys
 import traceback
-import asyncio
-########################################################
-# This part is totally optional, it's just to avoid Render errors
-# If you don't use Render, just remove it
-########################################################
-
 import threading
 import http.server
 import socketserver
 
-
-
+# Optional fake server for Render
 def run_fake_server():
     PORT = 8080
     Handler = http.server.SimpleHTTPRequestHandler
@@ -34,62 +27,226 @@ def run_fake_server():
 
 threading.Thread(target=run_fake_server, daemon=True).start()
 
-########################################################
-# End of fake server
-########################################################
-
 async def start(update, context):
-    await update.message.reply_text(
-        "👋 Hello ! Commandes disponibles :\n"
-        "/add - Ajouter un biberon\n"
-        "/last - Dernier biberon\n"
-        "/total - Total du jour\n"
-        "/list - Liste des 4 derniers biberons\n"
-        "/delete - Supprime le dernier biberon\n"
-        "/poop - Ajouter un caca\n\n"
-        "/last - Dernier biberon et dernier caca\n"
-        "/list - Liste des 4 derniers biberons et le dernier caca\n"
-        "/total - Total du jour\n\n"
-        "/join <nom_du_groupe> - Rejoindre un groupe\n"
-        "/update_time <HH:MM> - Met à jour l'heure du bot\n"
-        "/time - Affiche l'heure du bot\n\n"
-        "/help - Affiche cette aide\n\n"
-        "Tu peux aussi utiliser /cancel pour annuler l'ajout d'un biberon pendant un /add\n"
-
+    """Initialize the main message for the user"""
+    user_id = update.effective_user.id
+    data = load_data()
+    group = find_group_for_user(data, user_id)
+    if not group:
+        group = create_personal_group(data, user_id)
+        await save_data(data, context)
+    
+    # Create main message with inline keyboard
+    message_text, keyboard = get_main_message_content(data, group)
+    
+    sent_message = await update.message.reply_text(
+        message_text,
+        reply_markup=keyboard,
+        parse_mode="Markdown"
     )
+    
+    # Store message ID in user data for future updates
+    context.user_data['main_message_id'] = sent_message.message_id
+    context.user_data['chat_id'] = update.effective_chat.id
 
 async def help_command(update, context):
-    await start(update, context)
+    await update.message.reply_text(
+        "👋 **Baby Bottle Tracker Bot**\n\n"
+        "**Fonctionnalités principales:**\n"
+        "• 🍼 Ajouter/supprimer des biberons\n"
+        "• 💩 Enregistrer les selles\n"
+        "• 📊 Voir les statistiques\n"
+        "• ⚙️ Paramètres personnalisables\n\n"
+        "**Utilisation:**\n"
+        "Utilisez les boutons dans le message principal pour naviguer.\n"
+        "Toutes les actions se font dans le même message !",
+        parse_mode="Markdown"
+    )
+
+async def button_handler(update, context):
+    """Handle all inline keyboard button presses"""
+    query = update.callback_query
+    await query.answer()
+    
+    user_id = update.effective_user.id
+    data = load_data()
+    group = find_group_for_user(data, user_id)
+    if not group:
+        group = create_personal_group(data, user_id)
+        await save_data(data, context)
+    
+    action = query.data
+    
+    if action == "refresh":
+        # Refresh main message
+        message_text, keyboard = get_main_message_content(data, group)
+        await query.edit_message_text(
+            text=message_text,
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
+    
+    elif action == "add_bottle":
+        # Start add bottle flow
+        context.user_data['action'] = 'add_bottle'
+        return await add_bottle(update, context)
+    
+    elif action == "remove_bottle":
+        # Show confirmation dialog for bottle deletion
+        await delete_bottle(update, context)
+    
+    elif action == "confirm_delete":
+        # Confirm bottle deletion
+        await confirm_delete_bottle(update, context)
+    
+    elif action == "cancel_delete":
+        # Cancel bottle deletion
+        await cancel_delete_bottle(update, context)
+    
+    elif action == "add_poop":
+        # Start add poop flow
+        context.user_data['action'] = 'add_poop'
+        return await add_poop(update, context)
+    
+    elif action == "stats":
+        # Show statistics
+        await show_stats(update, context)
+    
+    elif action == "settings":
+        # Show settings
+        await show_settings(update, context)
+    
+    elif action == "groups":
+        # Show groups management
+        await show_groups_menu(update, context)
+    
+    elif action.startswith("group_"):
+        # Handle group management actions
+        await handle_group_actions(update, context)
+    
+    elif action.startswith("bottle_time_"):
+        # Handle bottle time selection
+        time_str = action.replace("bottle_time_", "")
+        return await handle_bottle_time(update, context, time_str)
+    
+    elif action.startswith("bottle_amount_"):
+        # Handle bottle amount selection
+        amount_str = action.replace("bottle_amount_", "")
+        return await handle_bottle_amount(update, context, amount_str)
+    
+    elif action.startswith("poop_time_"):
+        # Handle poop time selection
+        time_str = action.replace("poop_time_", "")
+        return await handle_poop_time(update, context, time_str)
+    
+    elif action.startswith("poop_info_"):
+        # Handle poop info selection
+        info = action.replace("poop_info_", "")
+        if info == "none":
+            info = None
+        return await handle_poop_info(update, context)
+    
+    elif action.startswith("setting_"):
+        # Handle settings changes
+        setting = action.replace("setting_", "")
+        return await handle_settings(update, context, setting)
+    
+    elif action.startswith("set_bottles_"):
+        # Handle bottle count setting
+        setting = action.replace("set_bottles_", "")
+        return await handle_settings(update, context, f"set_bottles_{setting}")
+    
+    elif action.startswith("set_poops_"):
+        # Handle poop count setting
+        setting = action.replace("set_poops_", "")
+        return await handle_settings(update, context, f"set_poops_{setting}")
+    
+    elif action == "cancel":
+        # Cancel current action and return to main
+        message_text, keyboard = get_main_message_content(data, group)
+        await query.edit_message_text(
+            text=message_text,
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
 
 async def error_handler(update, context):
     print(f"Error: {context.error}")
-    # Récupère la trace complète
     exc_type, exc_value, exc_traceback = sys.exc_info()
     tb_lines = traceback.format_exception(exc_type, exc_value, exc_traceback)
     error_text = "".join(tb_lines)
-
-    # Imprime la trace complète dans la console
+    
     print("🔍 Full traceback:")
     print(error_text)
+    
     if update and update.effective_message:
         await update.effective_message.reply_text("❌ Une erreur s'est produite. Veuillez réessayer.")
 
 async def set_commands(app):
-        commands = [
-            BotCommand("start", "Demarre le bot"),
-            BotCommand("help", "Affiche l'aide"),
-            BotCommand("add", "Ajoute un biberon"),
-            BotCommand("delete", "Supprime le dernier biberon"),
-            BotCommand("poop", "Ajoute un caca"),
-            BotCommand("last", "Dernier biberon et dernier caca"),
-            BotCommand("list", "Liste des derniers biberons et caca"),
-            BotCommand("total", "Total du jour"),
-            BotCommand("join", "Rejoint un groupe"),
-            BotCommand("update_time", "Met à jour l'heure du bot"),
-            BotCommand("time", "Affiche l'heure du bot"),
-        ]
-        await app.bot.set_my_commands(commands)
+    commands = [
+        BotCommand("start", "Démarrer le bot"),
+        BotCommand("help", "Afficher l'aide"),
+    ]
+    await app.bot.set_my_commands(commands)
 
+async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle text input for time and amount selection"""
+    user_id = update.effective_user.id
+    data = load_data()
+    group = find_group_for_user(data, user_id)
+    
+    # Check if user is in a conversation state
+    if 'conversation_state' not in context.user_data:
+        return
+    
+    state = context.user_data['conversation_state']
+    text = update.message.text.strip()
+    
+    if state == 'bottle_time':
+        # Handle bottle time text input
+        from handlers.add import handle_bottle_time
+        await handle_bottle_time(update, context, text)
+        
+    elif state == 'bottle_amount':
+        # Handle bottle amount text input
+        from handlers.add import handle_bottle_amount
+        await handle_bottle_amount(update, context, text)
+        
+    elif state == 'poop_time':
+        # Handle poop time text input
+        from handlers.poop import handle_poop_time
+        await handle_poop_time(update, context, text)
+    
+    elif state == 'poop_info':
+        # Handle poop info text input
+        from handlers.poop import handle_poop_info
+        await handle_poop_info(update, context)
+    
+    elif state == 'group_rename':
+        # Handle group rename text input
+        from handlers.groups import rename_group
+        current_group = find_group_for_user(data, user_id)
+        await rename_group(update, context, current_group, text)
+    
+    elif state == 'group_create':
+        # Handle group create text input
+        from handlers.groups import create_new_group
+        await create_new_group(update, context, text)
+    
+    elif state == 'group_join':
+        # Handle group join text input
+        from handlers.groups import join_group
+        await join_group(update, context, text)
+    
+    # Clear conversation state
+    context.user_data.pop('conversation_state', None)
+
+    # Delete the user's text message for a clean chat
+    if update.message:
+        try:
+            await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=update.message.message_id)
+        except Exception as e:
+            print(f"Failed to delete user message: {e}")
 
 def main():
     load_dotenv()
@@ -104,44 +261,44 @@ def main():
     # Load backup before setting up handlers
     print("Loading backup...")
     try:
+        from utils import load_backup_from_channel
         load_backup_from_channel()
         print("Backup loaded successfully")
     except Exception as e:
         print(f"Warning: Could not load backup: {e}")
 
     print("Setting up bot...")
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("add", add)],
+    
+    # Add bottle conversation handler
+    bottle_conv_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(add_bottle, pattern="^add_bottle$")],
         states={
-            ASK_AMOUNT: [MessageHandler(filters.TEXT | filters.COMMAND, handle_amount)],
-            ASK_TIME: [MessageHandler(filters.TEXT | filters.COMMAND, handle_time)],
+            ASK_BOTTLE_TIME: [CallbackQueryHandler(handle_bottle_time, pattern="^bottle_time_")],
+            ASK_BOTTLE_AMOUNT: [CallbackQueryHandler(handle_bottle_amount, pattern="^bottle_amount_")],
         },
-        fallbacks=[CommandHandler("cancel", cancel)]
+        fallbacks=[CallbackQueryHandler(cancel_bottle, pattern="^cancel$")],
+        per_message=True
     )
-
-    conv_poop_handler = ConversationHandler(
-        entry_points=[CommandHandler("poop", poop)],
+    
+    # Add poop conversation handler
+    poop_conv_handler = ConversationHandler(
+        entry_points=[CallbackQueryHandler(add_poop, pattern="^add_poop$")],
         states={
-        ASK_TIME_POOP: [MessageHandler(filters.TEXT | filters.COMMAND, handle_time_poop)],
-        ASK_INFO_POOP: [MessageHandler(filters.TEXT | filters.COMMAND, handle_info_poop)],
-    },
-    fallbacks=[CommandHandler("cancel", cancel)]
+            ASK_POOP_TIME: [CallbackQueryHandler(handle_poop_time, pattern="^poop_time_")],
+            ASK_POOP_INFO: [CallbackQueryHandler(handle_poop_info, pattern="^poop_info_")],
+        },
+        fallbacks=[CallbackQueryHandler(cancel_poop, pattern="^cancel$")],
+        per_message=True
     )
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("last", last))
-    app.add_handler(CommandHandler("total", total))
-    app.add_handler(CommandHandler("list", list_biberons_and_poop))
-    app.add_handler(CommandHandler("delete", delete))
-    app.add_handler(CommandHandler("join", join))
-    app.add_handler(CommandHandler("save_backup", save_backup))
-    app.add_handler(MessageHandler(filters.Document.ALL, restore_backup))
-    app.add_handler(conv_handler)
+    app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(bottle_conv_handler)
+    app.add_handler(poop_conv_handler)
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input))  # Handle text input
     app.add_error_handler(error_handler)
-    app.add_handler(CommandHandler("update_time", timeUpdate))
-    app.add_handler(CommandHandler("time", time))
-    app.add_handler(conv_poop_handler)
+    
     print("Starting bot...")
     app.run_polling()
 
