@@ -147,7 +147,7 @@ def is_valid_time(time_str: str) -> bool:
         return False
     
 def getValidDate(time: str, difference: int) -> str:
-    date = datetime.now().date()
+    date = (datetime.now(ZoneInfo("UTC")) + timedelta(hours=difference)).date()
     timeToCompare = datetime.strptime(time, "%H:%M").time()
     actualTime = (datetime.now(ZoneInfo("UTC")) + timedelta(hours=difference)).time()
     if actualTime < timeToCompare:
