@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 from zoneinfo import ZoneInfo
-from utils import load_data, save_data, find_group_for_user, create_personal_group, is_valid_time, getValidDate
+from utils import load_data, save_data, find_group_for_user, create_personal_group, is_valid_time, normalize_time, getValidDate, delete_user_message, update_main_message, ensure_main_message_exists, set_group_message_info
 from config import TEST_MODE
 
 ASK_BOTTLE_TIME, ASK_BOTTLE_AMOUNT = range(2)
@@ -82,10 +82,13 @@ async def handle_bottle_time(update: Update, context: ContextTypes.DEFAULT_TYPE,
             # Extract time from callback data
             time_str = query.data.replace("bottle_time_", "")
     else:
-        # This is a text message
+        # This is a text message - delete it immediately
         query = None
         if not time_str:
             time_str = update.message.text.strip()
+        # Delete user message for clean chat
+        await delete_user_message(context, update.effective_chat.id, update.message.message_id)
+    
     data = load_data()
     user_id = update.effective_user.id
     group = find_group_for_user(data, user_id)
@@ -97,8 +100,9 @@ async def handle_bottle_time(update: Update, context: ContextTypes.DEFAULT_TYPE,
             time_str = time_str.split(" ")[1]
         else:
             date = getValidDate(time_str, data[group].get("time_difference", 0))
-        # Validate time format
-        if not is_valid_time(time_str):
+        # Normalize and validate time format
+        normalized_time = normalize_time(time_str)
+        if not is_valid_time(normalized_time):
             error_msg = "❌ Format d'heure invalide. Veuillez réessayer."
             if query:
                 await query.edit_message_text(
@@ -108,25 +112,14 @@ async def handle_bottle_time(update: Update, context: ContextTypes.DEFAULT_TYPE,
                     ]])
                 )
             else:
-                # Edit main message if possible
-                message_id = context.user_data.get('main_message_id')
-                chat_id = context.user_data.get('chat_id')
-                if message_id and chat_id:
-                    await context.bot.edit_message_text(
-                        error_msg,
-                        chat_id=chat_id,
-                        message_id=message_id,
-                        reply_markup=InlineKeyboardMarkup([[
-                            InlineKeyboardButton("❌ Annuler", callback_data="cancel")
-                        ]])
-                    )
-                else:
-                    sent = await update.message.reply_text(error_msg)
-                    context.user_data['main_message_id'] = sent.message_id
-                    context.user_data['chat_id'] = sent.chat_id
+                # Use utility function to update main message
+                await ensure_main_message_exists(update, context, data, group)
+                await update_main_message(context, error_msg, InlineKeyboardMarkup([[
+                    InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+                ]]))
             return ASK_BOTTLE_TIME
-        # Store time in context
-        context.user_data['bottle_time'] = f"{date} {time_str}"
+        # Store normalized time in context
+        context.user_data['bottle_time'] = f"{date} {normalized_time}"
         # Show amount selection
         last_bottle = data[group].get("last_bottle", 120)
         # Create amount buttons
@@ -152,24 +145,13 @@ async def handle_bottle_time(update: Update, context: ContextTypes.DEFAULT_TYPE,
                 parse_mode="Markdown"
             )
         else:
-            message_id = context.user_data.get('main_message_id')
-            chat_id = context.user_data.get('chat_id')
-            if message_id and chat_id:
-                await context.bot.edit_message_text(
-                    text=message,
-                    chat_id=chat_id,
-                    message_id=message_id,
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode="Markdown"
-                )
-            else:
-                sent = await update.message.reply_text(
-                    text=message,
-                    reply_markup=InlineKeyboardMarkup(keyboard),
-                    parse_mode="Markdown"
-                )
-                context.user_data['main_message_id'] = sent.message_id
-                context.user_data['chat_id'] = sent.chat_id
+            # Use utility function to update main message
+            await ensure_main_message_exists(update, context, data, group)
+            await update_main_message(context, message, InlineKeyboardMarkup(keyboard))
+            # Store the message ID for future text inputs
+            if context.user_data.get('main_message_id') and context.user_data.get('chat_id'):
+                set_group_message_info(data, group, user_id, context.user_data['main_message_id'], context.user_data['chat_id'])
+                await save_data(data, context)
         return ASK_BOTTLE_AMOUNT
     except Exception as e:
         error_msg = f"❌ Erreur: {str(e)}"
@@ -181,21 +163,11 @@ async def handle_bottle_time(update: Update, context: ContextTypes.DEFAULT_TYPE,
                 ]])
             )
         else:
-            message_id = context.user_data.get('main_message_id')
-            chat_id = context.user_data.get('chat_id')
-            if message_id and chat_id:
-                await context.bot.edit_message_text(
-                    error_msg,
-                    chat_id=chat_id,
-                    message_id=message_id,
-                    reply_markup=InlineKeyboardMarkup([[
-                        InlineKeyboardButton("❌ Annuler", callback_data="cancel")
-                    ]])
-                )
-            else:
-                sent = await update.message.reply_text(error_msg)
-                context.user_data['main_message_id'] = sent.message_id
-                context.user_data['chat_id'] = sent.chat_id
+            # Use utility function to update main message
+            await ensure_main_message_exists(update, context, data, group)
+            await update_main_message(context, error_msg, InlineKeyboardMarkup([[
+                InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+            ]]))
         return ConversationHandler.END
 
 async def handle_bottle_amount(update: Update, context: ContextTypes.DEFAULT_TYPE, amount_str: str = None):
@@ -208,10 +180,13 @@ async def handle_bottle_amount(update: Update, context: ContextTypes.DEFAULT_TYP
             # Extract amount from callback data
             amount_str = query.data.replace("bottle_amount_", "")
     else:
-        # This is a text message
+        # This is a text message - delete it immediately
         query = None
         if not amount_str:
             amount_str = update.message.text.strip()
+        # Delete user message for clean chat
+        await delete_user_message(context, update.effective_chat.id, update.message.message_id)
+    
     try:
         amount = int(amount_str)
         timestamp = context.user_data.get('bottle_time')
@@ -225,21 +200,18 @@ async def handle_bottle_amount(update: Update, context: ContextTypes.DEFAULT_TYP
                     ]])
                 )
             else:
-                message_id = context.user_data.get('main_message_id')
-                chat_id = context.user_data.get('chat_id')
-                if message_id and chat_id:
-                    await context.bot.edit_message_text(
-                        error_msg,
-                        chat_id=chat_id,
-                        message_id=message_id,
-                        reply_markup=InlineKeyboardMarkup([[
-                            InlineKeyboardButton("❌ Annuler", callback_data="cancel")
-                        ]])
-                    )
-                else:
-                    sent = await update.message.reply_text(error_msg)
-                    context.user_data['main_message_id'] = sent.message_id
-                    context.user_data['chat_id'] = sent.chat_id
+                # Use utility function to update main message
+                data = load_data()
+                user_id = update.effective_user.id
+                group = find_group_for_user(data, user_id)
+                await ensure_main_message_exists(update, context, data, group)
+                await update_main_message(context, error_msg, InlineKeyboardMarkup([[
+                    InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+                ]]))
+                # Store the message ID for future text inputs
+                if context.user_data.get('main_message_id') and context.user_data.get('chat_id'):
+                    set_group_message_info(data, group, user_id, context.user_data['main_message_id'], context.user_data['chat_id'])
+                    await save_data(data, context)
             return ConversationHandler.END
         # Save the bottle entry
         data = load_data()
@@ -259,24 +231,16 @@ async def handle_bottle_amount(update: Update, context: ContextTypes.DEFAULT_TYP
                 parse_mode="Markdown"
             )
         else:
-            message_id = context.user_data.get('main_message_id')
-            chat_id = context.user_data.get('chat_id')
-            if message_id and chat_id:
-                await context.bot.edit_message_text(
-                    text=success_text,
-                    chat_id=chat_id,
-                    message_id=message_id,
-                    reply_markup=keyboard,
-                    parse_mode="Markdown"
-                )
-            else:
-                sent = await update.message.reply_text(
-                    text=success_text,
-                    reply_markup=keyboard,
-                    parse_mode="Markdown"
-                )
-                context.user_data['main_message_id'] = sent.message_id
-                context.user_data['chat_id'] = sent.chat_id
+            # Use utility function to update main message
+            await ensure_main_message_exists(update, context, data, group)
+            await update_main_message(context, success_text, keyboard)
+            # Store the message ID for future text inputs
+            if context.user_data.get('main_message_id') and context.user_data.get('chat_id'):
+                set_group_message_info(data, group, user_id, context.user_data['main_message_id'], context.user_data['chat_id'])
+                await save_data(data, context)
+        
+        # Clear conversation state when complete
+        context.user_data.pop('conversation_state', None)
         return ConversationHandler.END
     except ValueError:
         error_msg = "❌ Quantité invalide. Veuillez réessayer."
@@ -288,21 +252,18 @@ async def handle_bottle_amount(update: Update, context: ContextTypes.DEFAULT_TYP
                 ]])
             )
         else:
-            message_id = context.user_data.get('main_message_id')
-            chat_id = context.user_data.get('chat_id')
-            if message_id and chat_id:
-                await context.bot.edit_message_text(
-                    error_msg,
-                    chat_id=chat_id,
-                    message_id=message_id,
-                    reply_markup=InlineKeyboardMarkup([[
-                        InlineKeyboardButton("❌ Annuler", callback_data="cancel")
-                    ]])
-                )
-            else:
-                sent = await update.message.reply_text(error_msg)
-                context.user_data['main_message_id'] = sent.message_id
-                context.user_data['chat_id'] = sent.chat_id
+            # Use utility function to update main message
+            data = load_data()
+            user_id = update.effective_user.id
+            group = find_group_for_user(data, user_id)
+            await ensure_main_message_exists(update, context, data, group)
+            await update_main_message(context, error_msg, InlineKeyboardMarkup([[
+                InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+            ]]))
+            # Store the message ID for future text inputs
+            if context.user_data.get('main_message_id') and context.user_data.get('chat_id'):
+                set_group_message_info(data, group, user_id, context.user_data['main_message_id'], context.user_data['chat_id'])
+                await save_data(data, context)
         return ASK_BOTTLE_AMOUNT
     except Exception as e:
         error_msg = f"❌ Erreur: {str(e)}"
@@ -314,21 +275,21 @@ async def handle_bottle_amount(update: Update, context: ContextTypes.DEFAULT_TYP
                 ]])
             )
         else:
-            message_id = context.user_data.get('main_message_id')
-            chat_id = context.user_data.get('chat_id')
-            if message_id and chat_id:
-                await context.bot.edit_message_text(
-                    error_msg,
-                    chat_id=chat_id,
-                    message_id=message_id,
-                    reply_markup=InlineKeyboardMarkup([[
-                        InlineKeyboardButton("❌ Annuler", callback_data="cancel")
-                    ]])
-                )
-            else:
-                sent = await update.message.reply_text(error_msg)
-                context.user_data['main_message_id'] = sent.message_id
-                context.user_data['chat_id'] = sent.chat_id
+            # Use utility function to update main message
+            data = load_data()
+            user_id = update.effective_user.id
+            group = find_group_for_user(data, user_id)
+            await ensure_main_message_exists(update, context, data, group)
+            await update_main_message(context, error_msg, InlineKeyboardMarkup([[
+                InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+            ]]))
+            # Store the message ID for future text inputs
+            if context.user_data.get('main_message_id') and context.user_data.get('chat_id'):
+                set_group_message_info(data, group, user_id, context.user_data['main_message_id'], context.user_data['chat_id'])
+                await save_data(data, context)
+        
+        # Clear conversation state when complete
+        context.user_data.pop('conversation_state', None)
         return ConversationHandler.END
 
 async def cancel_bottle(update: Update, context: ContextTypes.DEFAULT_TYPE):

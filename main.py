@@ -6,10 +6,10 @@ from handlers.add import add_bottle, handle_bottle_time, handle_bottle_amount, c
 from handlers.poop import add_poop, handle_poop_time, handle_poop_info, cancel_poop, ASK_POOP_TIME, ASK_POOP_INFO
 from handlers.delete import delete_bottle, confirm_delete_bottle, cancel_delete_bottle
 from handlers.stats import show_stats
-from handlers.settings import show_settings, handle_settings
+from handlers.settings import show_settings, handle_settings, handle_timezone_text_input
 from handlers.groups import show_groups_menu, handle_group_actions, create_new_group, join_group
 from handlers.queries import get_main_message_content
-from utils import load_data, save_data, find_group_for_user, create_personal_group, load_backup_from_channel
+from utils import load_data, save_data, find_group_for_user, create_personal_group, load_backup_from_channel, get_group_message_info, set_group_message_info, clear_group_message_info
 from config import TEST_MODE
 
 import sys
@@ -30,6 +30,8 @@ threading.Thread(target=run_fake_server, daemon=True).start()
 async def start(update, context):
     """Initialize the main message for the user"""
     user_id = update.effective_user.id
+    context.user_data['user_id'] = user_id  # Store user_id for utility functions
+    
     data = load_data()
     group = find_group_for_user(data, user_id)
     if not group:
@@ -45,23 +47,77 @@ async def start(update, context):
         parse_mode="Markdown"
     )
     
-    # Store message ID in user data for future updates
-    context.user_data['main_message_id'] = sent_message.message_id
-    context.user_data['chat_id'] = update.effective_chat.id
+    set_group_message_info(data, group, user_id, sent_message.message_id, sent_message.chat_id)
+    await save_data(data, context)
+    
+    # Delete the user's command message for clean chat
+    try:
+        await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=update.message.message_id)
+    except Exception as e:
+        print(f"Failed to delete user command message: {e}")
 
 async def help_command(update, context):
-    await update.message.reply_text(
-        "👋 **Baby Bottle Tracker Bot**\n\n"
-        "**Fonctionnalités principales:**\n"
-        "• 🍼 Ajouter/supprimer des biberons\n"
-        "• 💩 Enregistrer les selles\n"
-        "• 📊 Voir les statistiques\n"
-        "• ⚙️ Paramètres personnalisables\n\n"
-        "**Utilisation:**\n"
-        "Utilisez les boutons dans le message principal pour naviguer.\n"
-        "Toutes les actions se font dans le même message !",
-        parse_mode="Markdown"
-    )
+    user_id = update.effective_user.id
+    context.user_data['user_id'] = user_id  # Store user_id for utility functions
+    
+    data = load_data()
+    group = find_group_for_user(data, user_id)
+    if not group:
+        group = create_personal_group(data, user_id)
+        await save_data(data, context)
+    
+    # Create help message with return button
+    help_message = "👋 **Baby Bottle Tracker Bot**\n\n" \
+                  "**Fonctionnalités principales:**\n" \
+                  "• 🍼 Ajouter/supprimer des biberons\n" \
+                  "• 💩 Enregistrer les selles\n" \
+                  "• 📊 Voir les statistiques\n" \
+                  "• ⚙️ Paramètres personnalisables\n\n" \
+                  "**Utilisation:**\n" \
+                  "Utilisez les boutons dans le message principal pour naviguer.\n" \
+                  "Toutes les actions se font dans le même message !"
+    
+    # Create keyboard with just a return button
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("🏠 Retour", callback_data="refresh")
+    ]])
+    
+    # Try to update existing main message, or create new one
+    message_id, chat_id = get_group_message_info(data, group, user_id)
+    if message_id and chat_id:
+        try:
+            await context.bot.edit_message_text(
+                text=help_message,
+                chat_id=chat_id,
+                message_id=message_id,
+                reply_markup=keyboard,
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            print(f"Failed to edit main message with help: {e}")
+            # Fallback: create new message
+            sent_message = await update.message.reply_text(
+                help_message,
+                reply_markup=keyboard,
+                parse_mode="Markdown"
+            )
+            set_group_message_info(data, group, user_id, sent_message.message_id, sent_message.chat_id)
+            await save_data(data, context)
+    else:
+        # No existing main message, create new one
+        sent_message = await update.message.reply_text(
+            help_message,
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
+        set_group_message_info(data, group, user_id, sent_message.message_id, sent_message.chat_id)
+        await save_data(data, context)
+    
+    # Delete the user's command message for clean chat
+    try:
+        await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=update.message.message_id)
+    except Exception as e:
+        print(f"Failed to delete user command message: {e}")
 
 async def button_handler(update, context):
     """Handle all inline keyboard button presses"""
@@ -69,11 +125,17 @@ async def button_handler(update, context):
     await query.answer()
     
     user_id = update.effective_user.id
+    context.user_data['user_id'] = user_id  # Store user_id for utility functions
+    
     data = load_data()
     group = find_group_for_user(data, user_id)
     if not group:
         group = create_personal_group(data, user_id)
         await save_data(data, context)
+    
+    # Store the current message ID for this interaction (only for this session)
+    context.user_data['main_message_id'] = query.message.message_id
+    context.user_data['chat_id'] = query.message.chat.id
     
     action = query.data
     
@@ -161,6 +223,15 @@ async def button_handler(update, context):
         setting = action.replace("set_poops_", "")
         return await handle_settings(update, context, f"set_poops_{setting}")
     
+    elif action.startswith("set_time_"):
+        # Handle time setting
+        setting = action.replace("set_time_", "")
+        return await handle_settings(update, context, f"set_time_{setting}")
+    
+    elif action == "manual_time_input":
+        # Handle manual time input
+        return await handle_settings(update, context, "manual_time_input")
+    
     elif action == "cancel":
         # Cancel current action and return to main
         message_text, keyboard = get_main_message_content(data, group)
@@ -179,7 +250,35 @@ async def error_handler(update, context):
     print("🔍 Full traceback:")
     print(error_text)
     
+    # Try to show error in main message instead of creating new message
     if update and update.effective_message:
+        try:
+            # Get main message info
+            user_id = update.effective_user.id
+            data = load_data()
+            group = find_group_for_user(data, user_id)
+            message_id, chat_id = get_group_message_info(data, group, user_id)
+            
+            if message_id and chat_id:
+                # Try to edit the main message with error
+                from handlers.queries import get_main_message_content
+                
+                if group:
+                    message_text, keyboard = get_main_message_content(data, group)
+                    error_text = f"❌ **Une erreur s'est produite**\n\n{message_text}"
+                    
+                    await context.bot.edit_message_text(
+                        text=error_text,
+                        chat_id=chat_id,
+                        message_id=message_id,
+                        reply_markup=keyboard,
+                        parse_mode="Markdown"
+                    )
+                    return
+        except Exception as edit_error:
+            print(f"Failed to edit main message with error: {edit_error}")
+        
+        # Fallback: send new error message
         await update.effective_message.reply_text("❌ Une erreur s'est produite. Veuillez réessayer. Erreur: " + str(context.error))
 
 async def set_commands(app):
@@ -192,12 +291,47 @@ async def set_commands(app):
 async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle text input for time and amount selection"""
     user_id = update.effective_user.id
+    context.user_data['user_id'] = user_id  # Store user_id for utility functions
+    
     data = load_data()
     group = find_group_for_user(data, user_id)
     
     # Check if user is in a conversation state
     if 'conversation_state' not in context.user_data:
+        # User is not in a conversation - show helpful message
+        help_message = "💡 **Utilisez les boutons ci-dessous pour interagir avec le bot !**\n\n" \
+                      "• 🍼 **Ajouter** - Pour ajouter un biberon\n" \
+                      "• 💩 **Caca** - Pour enregistrer un caca\n" \
+                      "• 📊 **Stats** - Pour voir les statistiques\n" \
+                      "• ⚙️ **Paramètres** - Pour configurer l'affichage"
+        
+        # Send a temporary help message that will be deleted after a few seconds
+        sent_message = await update.message.reply_text(
+            help_message,
+            parse_mode="Markdown"
+        )
+        
+        # Delete the help message after 3 seconds
+        import asyncio
+        await asyncio.sleep(3)
+        try:
+            await context.bot.delete_message(chat_id=sent_message.chat_id, message_id=sent_message.message_id)
+        except Exception as e:
+            print(f"Failed to delete help message: {e}")
+        
+        # Delete the user's message for clean chat
+        if update.message:
+            try:
+                await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=update.message.message_id)
+            except Exception as e:
+                print(f"Failed to delete user message: {e}")
         return
+    
+    # For text input, we need to get the stored message ID from the group data
+    message_id, chat_id = get_group_message_info(data, group, user_id)
+    if message_id and chat_id:
+        context.user_data['main_message_id'] = message_id
+        context.user_data['chat_id'] = chat_id
     
     state = context.user_data['conversation_state']
     text = update.message.text.strip()
@@ -238,8 +372,12 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from handlers.groups import join_group
         await join_group(update, context, text)
     
-    # Clear conversation state
-    context.user_data.pop('conversation_state', None)
+    elif state == 'timezone_input':
+        # Handle timezone input text
+        from handlers.settings import handle_timezone_text_input
+        await handle_timezone_text_input(update, context, text)
+    
+    # Don't clear conversation state here - let the individual handlers do it when conversation is complete
 
     # Delete the user's text message for a clean chat
     if update.message:

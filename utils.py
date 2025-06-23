@@ -10,6 +10,7 @@ import time as time_module
 load_dotenv()
 
 DATA_FILE = "biberons.json"
+MESSAGE_IDS_FILE = "message_ids.json"  # New file to store message IDs
 BACKUP_CHANNEL_ID = os.getenv("BACKUP_CHANNEL_ID")
 TELEGRAM_API_ID = os.getenv("TELEGRAM_API_ID")
 TELEGRAM_API_HASH = os.getenv("TELEGRAM_API_HASH")
@@ -134,13 +135,37 @@ def load_backup_from_channel():
         print(f"⚠️ Erreur pendant le chargement du backup : {e}")
 
         
+def normalize_time(time_str: str) -> str:
+    """Normalize time input to HH:MM format"""
+    try:
+        # Remove any extra spaces
+        time_str = time_str.strip()
+        
+        # Check if it's already in HH:MM format
+        if len(time_str) == 5 and time_str[2] == ':':
+            return time_str
+        
+        # Check if it's in H:MM format (4 characters with colon in position 1)
+        if len(time_str) == 4 and time_str[1] == ':':
+            hours = time_str[0]
+            minutes = time_str[2:4]
+            return f"0{hours}:{minutes}"
+        
+        # If it doesn't match any expected format, return as is (will be validated later)
+        return time_str
+    except (ValueError, IndexError):
+        return time_str
+
 def is_valid_time(time_str: str) -> bool:
     try:
+        # Normalize the time string first
+        normalized_time = normalize_time(time_str)
+        
         # Vérifie si l'heure est au format HH:MM
-        if not (len(time_str) == 5 and time_str[2] == ':'):
+        if not (len(normalized_time) == 5 and normalized_time[2] == ':'):
             return False
         
-        hours, minutes = map(int, time_str.split(':'))
+        hours, minutes = map(int, normalized_time.split(':'))
         # Vérifie si les heures et minutes sont dans les limites valides
         return 0 <= hours <= 23 and 0 <= minutes <= 59
     except (ValueError, IndexError):
@@ -248,4 +273,102 @@ def clean_data(data):
             if not isinstance(group_data["time_difference"], (int, float)):
                 group_data["time_difference"] = 0
     return data
+
+async def delete_user_message(context, chat_id, message_id):
+    """Safely delete a user message"""
+    try:
+        await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+        return True
+    except Exception as e:
+        print(f"Failed to delete user message: {e}")
+        return False
+
+async def update_main_message(context, message_text, keyboard, parse_mode="Markdown"):
+    """Update the main message or create a new one if needed"""
+    user_id = context.user_data.get('user_id')
+    if not user_id:
+        return False
+    
+    # For button interactions, use message ID from context
+    message_id = context.user_data.get('main_message_id')
+    chat_id = context.user_data.get('chat_id')
+    
+    # For text input or other cases, try stored message ID
+    if not message_id or not chat_id:
+        data = load_data()
+        group = find_group_for_user(data, user_id)
+        message_id, chat_id = get_group_message_info(data, group, user_id)
+    
+    if message_id and chat_id:
+        try:
+            await context.bot.edit_message_text(
+                text=message_text,
+                chat_id=chat_id,
+                message_id=message_id,
+                reply_markup=keyboard,
+                parse_mode=parse_mode
+            )
+            return True
+        except Exception as e:
+            print(f"Failed to edit main message: {e}")
+            # Clear invalid message ID
+            data = load_data()
+            group = find_group_for_user(data, user_id)
+            clear_group_message_info(data, group, user_id)
+            await save_data(data, context)
+            context.user_data.pop('main_message_id', None)
+            context.user_data.pop('chat_id', None)
+    
+    return False
+
+async def ensure_main_message_exists(update, context, data, group):
+    """Ensure the main message exists and is properly tracked"""
+    from handlers.queries import get_main_message_content
+    user_id = update.effective_user.id
+    context.user_data['user_id'] = user_id  # Store user_id for utility functions
+    message_text, keyboard = get_main_message_content(data, group)
+    # Try to update existing message first
+    if await update_main_message(context, message_text, keyboard):
+        return
+    # If no existing message or update failed, create new one
+    if hasattr(update, 'callback_query') and update.callback_query:
+        sent_message = await update.callback_query.edit_message_text(
+            text=message_text,
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
+    elif hasattr(update, 'message') and update.message:
+        sent_message = await update.message.reply_text(
+            text=message_text,
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
+    else:
+        return
+    set_group_message_info(data, group, user_id, sent_message.message_id, sent_message.chat_id)
+    await save_data(data, context)
+    context.user_data['main_message_id'] = sent_message.message_id
+    context.user_data['chat_id'] = sent_message.chat_id
+
+def get_group_message_info(data, group, user_id):
+    """Get message ID and chat ID for a specific user in a group"""
+    group_data = data.get(group, {})
+    user_messages = group_data.get('user_messages', {})
+    user_data = user_messages.get(str(user_id), {})
+    return user_data.get('main_message_id'), user_data.get('main_chat_id')
+
+def set_group_message_info(data, group, user_id, message_id, chat_id):
+    """Set message ID and chat ID for a specific user in a group"""
+    if group in data:
+        if 'user_messages' not in data[group]:
+            data[group]['user_messages'] = {}
+        data[group]['user_messages'][str(user_id)] = {
+            'main_message_id': message_id,
+            'main_chat_id': chat_id
+        }
+
+def clear_group_message_info(data, group, user_id):
+    """Clear message ID and chat ID for a specific user in a group"""
+    if group in data and 'user_messages' in data[group]:
+        data[group]['user_messages'].pop(str(user_id), None)
 

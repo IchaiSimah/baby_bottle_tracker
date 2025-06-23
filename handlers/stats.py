@@ -164,7 +164,7 @@ async def generate_ai_summary(stats):
         
         Analyse ces données et donne un résumé encourageant en français en 1-2 phrases maximum.
         Mentionne les tendances positives, la régularité, ou des observations utiles.
-        Sois bienveillant et encourageant pour les parents.
+        Sois bienveillant et encourageant pour les parents. Essaie cependant d'etre le plus pertinent possible.
         
         Exemple de format : "Votre bébé montre une belle régularité avec X biberons par jour en moyenne."
         """
