@@ -10,7 +10,7 @@ from handlers.settings import show_settings, handle_settings, handle_timezone_te
 from handlers.groups import show_groups_menu, handle_group_actions, create_new_group, join_group
 from handlers.queries import get_main_message_content, get_main_message_content_for_user
 from handlers.pdf import show_pdf_menu, handle_pdf_callback, generate_pdf_report
-from utils import load_data, save_data, find_group_for_user, create_personal_group, get_group_message_info, set_group_message_info, clear_group_message_info, get_performance_stats, load_user_data
+from utils import load_data, save_data, find_group_for_user, create_personal_group, get_group_message_info, set_group_message_info, clear_group_message_info, get_performance_stats, load_user_data, safe_edit_message_text_with_query
 from config import TEST_MODE
 from handlers.shabbat import (
     start_shabbat,
@@ -142,15 +142,18 @@ async def help_command(update, context):
                 parse_mode="Markdown"
             )
         except Exception as e:
-            print(f"Failed to edit main message with help: {e}")
-            # If editing fails, create a new message
-            sent_message = await update.message.reply_text(
-                help_message,
-                reply_markup=keyboard,
-                parse_mode="Markdown"
-            )
-            set_group_message_info(data, group_id, user_id, sent_message.message_id, sent_message.chat_id)
-            await save_data(data, context)
+            if "Message is not modified" in str(e):
+                print("ℹ️ Message content unchanged, skipping edit")
+            else:
+                print(f"Failed to edit main message with help: {e}")
+                # If editing fails, create a new message
+                sent_message = await update.message.reply_text(
+                    help_message,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+                set_group_message_info(data, group_id, user_id, sent_message.message_id, sent_message.chat_id)
+                await save_data(data, context)
     else:
         # No existing main message, create new one
         sent_message = await update.message.reply_text(
@@ -209,11 +212,17 @@ async def button_handler(update, context):
         # Clear conversation state when returning to main
         context.user_data.pop('conversation_state', None)
         message_text, keyboard = get_main_message_content_for_user(user_id)
-        await query.edit_message_text(
-            text=message_text,
-            reply_markup=keyboard,
-            parse_mode="Markdown"
-        )
+        try:
+            await query.edit_message_text(
+                text=message_text,
+                reply_markup=keyboard,
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            if "Message is not modified" in str(e):
+                print("ℹ️ Message content unchanged, skipping edit")
+            else:
+                raise e
     
     elif action == "add_bottle":
         # Start add bottle flow
@@ -312,11 +321,17 @@ async def button_handler(update, context):
         # Clear conversation state when canceling
         context.user_data.pop('conversation_state', None)
         message_text, keyboard = get_main_message_content(data, group_id)
-        await query.edit_message_text(
-            text=message_text,
-            reply_markup=keyboard,
-            parse_mode="Markdown"
-        )
+        try:
+            await query.edit_message_text(
+                text=message_text,
+                reply_markup=keyboard,
+                parse_mode="Markdown"
+            )
+        except Exception as e:
+            if "Message is not modified" in str(e):
+                print("ℹ️ Message content unchanged, skipping edit")
+            else:
+                raise e
     
     elif action == "shabbat":
         return await start_shabbat(update, context)
@@ -355,13 +370,19 @@ async def error_handler(update, context):
                     message_text, keyboard = get_main_message_content(data, group_id)
                     error_text = f"❌ **Une erreur s'est produite**\n\n{message_text}"
                     
-                    await context.bot.edit_message_text(
-                        text=error_text,
-                        chat_id=chat_id,
-                        message_id=message_id,
-                        reply_markup=keyboard,
-                        parse_mode="Markdown"
-                    )
+                    try:
+                        await context.bot.edit_message_text(
+                            text=error_text,
+                            chat_id=chat_id,
+                            message_id=message_id,
+                            reply_markup=keyboard,
+                            parse_mode="Markdown"
+                        )
+                    except Exception as e:
+                        if "Message is not modified" in str(e):
+                            print("ℹ️ Message content unchanged, skipping edit")
+                        else:
+                            raise e
                     return
         except Exception as edit_error:
             print(f"Failed to edit main message with error: {edit_error}")

@@ -68,8 +68,18 @@ def get_user_group_id(user_id: int) -> Optional[int]:
             return data[0]['id']
         return None
     except Exception as e:
-        print(f"Error getting group for user {user_id}: {e}")
-        return None
+        # Fallback: try a different approach if the first one fails
+        try:
+            # Get all groups and search locally
+            all_groups = get_all_groups()
+            for group_id, group_data in all_groups.items():
+                if user_id in group_data.get('users', []):
+                    return int(group_id)
+            return None
+        except Exception as fallback_error:
+            print(f"Error getting group for user {user_id}: {e}")
+            print(f"Fallback also failed: {fallback_error}")
+            return None
 
 def get_group_data_for_user(user_id: int) -> Optional[Dict]:
     """Get only the data needed for a specific user's group"""

@@ -430,3 +430,47 @@ def _record_db_call():
     with _performance_lock:
         _performance_stats['db_calls'] += 1
 
+async def safe_edit_message_text(update, context, text, reply_markup=None, parse_mode="Markdown"):
+    """Safely edit message text, handling 'Message is not modified' error"""
+    try:
+        if hasattr(update, 'callback_query') and update.callback_query:
+            await update.callback_query.edit_message_text(
+                text=text,
+                reply_markup=reply_markup,
+                parse_mode=parse_mode
+            )
+        else:
+            # Fallback for other cases
+            await context.bot.edit_message_text(
+                text=text,
+                chat_id=update.effective_chat.id,
+                message_id=update.effective_message.message_id,
+                reply_markup=reply_markup,
+                parse_mode=parse_mode
+            )
+    except Exception as e:
+        if "Message is not modified" in str(e):
+            # Message content is identical, no need to modify
+            print("ℹ️ Message content unchanged, skipping edit")
+            return
+        else:
+            # Re-raise other errors
+            raise e
+
+async def safe_edit_message_text_with_query(query, text, reply_markup=None, parse_mode="Markdown"):
+    """Safely edit message text using query, handling 'Message is not modified' error"""
+    try:
+        await query.edit_message_text(
+            text=text,
+            reply_markup=reply_markup,
+            parse_mode=parse_mode
+        )
+    except Exception as e:
+        if "Message is not modified" in str(e):
+            # Message content is identical, no need to modify
+            print("ℹ️ Message content unchanged, skipping edit")
+            return
+        else:
+            # Re-raise other errors
+            raise e
+
