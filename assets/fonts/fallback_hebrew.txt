@@ -1,2 +1,0 @@
-Ce fichier indique que la police hébreu n'a pas pu être téléchargée.
-Le système utilisera les polices système disponibles.
