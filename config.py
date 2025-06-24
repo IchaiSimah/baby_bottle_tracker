@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-TEST_MODE = True
+TEST_MODE = False
 
 # Supabase Configuration
 SUPABASE_URL = os.getenv("SUPABASE_URL")
