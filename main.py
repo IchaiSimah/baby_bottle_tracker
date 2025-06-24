@@ -9,8 +9,16 @@ from handlers.stats import show_stats
 from handlers.settings import show_settings, handle_settings, handle_timezone_text_input
 from handlers.groups import show_groups_menu, handle_group_actions, create_new_group, join_group
 from handlers.queries import get_main_message_content, get_main_message_content_for_user
+from handlers.pdf import show_pdf_menu, handle_pdf_callback, generate_pdf_report
 from utils import load_data, save_data, find_group_for_user, create_personal_group, get_group_message_info, set_group_message_info, clear_group_message_info, get_performance_stats, load_user_data
 from config import TEST_MODE
+from handlers.shabbat import (
+    start_shabbat,
+    handle_shabbat_friday_poop,
+    handle_shabbat_friday_bottle,
+    handle_shabbat_saturday_poop,
+    handle_shabbat_saturday_bottle
+)
 
 import sys
 import traceback
@@ -35,11 +43,14 @@ async def start(update, context):
     # Use optimized data loading
     data = load_user_data(user_id)
     if not data:
+        print("No data found")
         # Fallback to create personal group if needed
         data = load_data()
         group_id = find_group_for_user(data, user_id)
         if not group_id:
+            print("Creating personal group")
             group_id = create_personal_group(data, user_id)
+            print("Group created: ", group_id)
             await save_data(data, context)
             # Reload user data after creating group
             data = load_user_data(user_id)
@@ -105,7 +116,7 @@ async def help_command(update, context):
     help_message = "👋 **Baby Bottle Tracker Bot** 🍼\n\n" \
                   "**✨ Fonctionnalités principales :**\n" \
                   "• 🍼 Ajouter/supprimer des biberons\n" \
-                  "• 💩 Enregistrer les changements\n" \
+                  "• 💩 ajouter des cacas\n" \
                   "• 📊 Voir les statistiques\n" \
                   "• ⚙️ Paramètres personnalisables\n\n" \
                   "**🎯 Utilisation :**\n" \
@@ -234,6 +245,14 @@ async def button_handler(update, context):
         # Show settings
         await show_settings(update, context)
     
+    elif action == "pdf_menu":
+        # Show PDF menu
+        await show_pdf_menu(update, context)
+    
+    elif action.startswith("pdf_"):
+        # Handle PDF actions
+        await handle_pdf_callback(update, context)
+    
     elif action == "groups":
         # Show groups management
         await show_groups_menu(update, context)
@@ -298,6 +317,17 @@ async def button_handler(update, context):
             reply_markup=keyboard,
             parse_mode="Markdown"
         )
+    
+    elif action == "shabbat":
+        return await start_shabbat(update, context)
+    
+    elif action.startswith("setting_last_bottle"):
+        return await handle_settings(update, context, "last_bottle")
+    elif action.startswith("set_last_bottle_"):
+        setting = action.replace("set_last_bottle_", "set_last_bottle_")
+        return await handle_settings(update, context, setting)
+    elif action == "manual_last_bottle_input":
+        return await handle_settings(update, context, "manual_last_bottle_input")
 
 async def error_handler(update, context):
     print(f"Error: {context.error}")
@@ -494,6 +524,19 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Handle timezone input text
         from handlers.settings import handle_timezone_text_input
         await handle_timezone_text_input(update, context, text)
+    
+    elif state == 'shabbat_friday_poop':
+        await handle_shabbat_friday_poop(update, context)
+    elif state == 'shabbat_friday_bottle':
+        await handle_shabbat_friday_bottle(update, context)
+    elif state == 'shabbat_saturday_poop':
+        await handle_shabbat_saturday_poop(update, context)
+    elif state == 'shabbat_saturday_bottle':
+        await handle_shabbat_saturday_bottle(update, context)
+    
+    elif state == 'last_bottle_input':
+        from handlers.settings import handle_last_bottle_text_input
+        await handle_last_bottle_text_input(update, context, text)
     
     # Don't clear conversation state here - let the individual handlers do it when conversation is complete
 

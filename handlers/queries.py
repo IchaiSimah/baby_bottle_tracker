@@ -47,6 +47,7 @@ def get_main_message_content(data, group_id):
             entries_text += f"`{time_str}` - *{entry['amount']}ml* 🍼\n"
         message += entries_text
     else:
+        message += "🍼 **pensez à mettre l'heure a jour dans les paramètres !**\n"
         message += "_Aucun biberon enregistré pour le moment_ 📝\n"
     
     message += "\n"
@@ -67,17 +68,21 @@ def get_main_message_content(data, group_id):
             poop_text += " 💩\n"
         message += poop_text
     else:
-        message += "_Aucun caca enregistré pour le moment_ 📝\n"
+        message += "_Aucu enregistré pour le moment_ 📝\n"
     
     # Create inline keyboard
     keyboard = [
         [
-            InlineKeyboardButton("🍼 Ajouter", callback_data="add_bottle"),
-            InlineKeyboardButton("❌ Supprimer", callback_data="remove_bottle")
+            InlineKeyboardButton("🍼 Biberon", callback_data="add_bottle"),
+            InlineKeyboardButton("💩 Caca", callback_data="add_poop"),
         ],
         [
-            InlineKeyboardButton("💩 Caca", callback_data="add_poop"),
-            InlineKeyboardButton("📊 Statistiques", callback_data="stats")
+            InlineKeyboardButton("❌ Supprimer", callback_data="remove_bottle"),
+            InlineKeyboardButton("🕯️ Shabbat", callback_data="shabbat"),
+        ],
+        [
+            InlineKeyboardButton("📊 Statistiques", callback_data="stats"),
+            InlineKeyboardButton("📄 PDF", callback_data="pdf_menu")
         ],
         [
             InlineKeyboardButton("⚙️ Paramètres", callback_data="settings")

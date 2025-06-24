@@ -6,3 +6,6 @@ handlers/__pycache__
 anon.session
 backup_biberons.json
 config.py
+fonts/
+assets/
+*.pdf

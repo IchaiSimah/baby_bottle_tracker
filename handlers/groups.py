@@ -204,11 +204,16 @@ async def rename_group(update: Update, context: ContextTypes.DEFAULT_TYPE, curre
     
     # Validate new name
     if not is_valid_group_name(new_name):
-        message = "❌ **Nom invalide**\n\nLe nom doit contenir 3-20 caractères et ne peut contenir que des lettres, chiffres, espaces et tirets."
-        keyboard = [[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]]
+        message = "❌ **Nom invalide**\n\nLe nom doit contenir 3-20 caractères et ne peut contenir que des lettres, chiffres, espaces et tirets. \n Veuillez réessayer."
         
-        # Clear conversation state for invalid name
-        context.user_data.pop('conversation_state', None)
+        # Create keyboard with retry and return options
+        keyboard = [
+            [InlineKeyboardButton("🏠 Accueil", callback_data="refresh")],
+            [InlineKeyboardButton("⬅️ Retour", callback_data="settings")]
+        ]
+        
+        # Keep conversation state active for retry
+        context.user_data['conversation_state'] = 'group_rename'
         
         if query:
             await query.edit_message_text(
@@ -229,11 +234,16 @@ async def rename_group(update: Update, context: ContextTypes.DEFAULT_TYPE, curre
     # Check if name already exists using loaded data instead of database call
     for group_id, group_info in data.items():
         if group_info['name'] == new_name:
-            message = f"❌ **Nom déjà pris**\n\nLe groupe `{new_name}` existe déjà."
-            keyboard = [[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]]
+            message = f"❌ **Nom déjà pris**\n\nLe groupe `{new_name}` existe déjà. \n Veuillez choisir un autre nom."
             
-            # Clear conversation state for duplicate name
-            context.user_data.pop('conversation_state', None)
+            # Create keyboard with retry and return options
+            keyboard = [
+                [InlineKeyboardButton("🏠 Accueil", callback_data="refresh")],
+                [InlineKeyboardButton("⬅️ Retour", callback_data="settings")]
+            ]
+            
+            # Keep conversation state active for retry
+            context.user_data['conversation_state'] = 'group_rename'
             
             if query:
                 await query.edit_message_text(
@@ -248,9 +258,7 @@ async def rename_group(update: Update, context: ContextTypes.DEFAULT_TYPE, curre
     # Rename the group in the database
     current_group_id_int = int(current_group_id)
     user_id = update.effective_user.id
-    print(f"DEBUG: Renaming group {current_group_id_int} to '{new_name}'")
     if update_group_name(current_group_id_int, new_name):
-        print(f"DEBUG: Group renamed successfully in database")
         # Invalidate ALL caches to ensure fresh data
         invalidate_cache()  # Invalidate global cache
         invalidate_user_cache(user_id)  # Invalidate user cache
@@ -258,38 +266,38 @@ async def rename_group(update: Update, context: ContextTypes.DEFAULT_TYPE, curre
         
         # Recharge les données du groupe après la modification (avec cache invalidé)
         data = load_data()
-        print(f"DEBUG: Reloaded data, group name is now: {data.get(str(current_group_id_int), {}).get('name', 'NOT FOUND')}")
         # Clear conversation state after successful rename
         context.user_data.pop('conversation_state', None)
         # Return to main menu
         from handlers.queries import get_main_message_content
         group_id = find_group_for_user(data, user_id)
-        print(f"DEBUG: Found group_id: {group_id}")
         message_text, main_keyboard = get_main_message_content(data, group_id)
-        print(f"DEBUG: Generated message with group name: {data.get(group_id, {}).get('name', 'NOT FOUND')}")
         
         # Add confirmation message to avoid "Message is not modified" error
         success_text = f"✅ **Groupe renommé !**\n\nLe groupe a été renommé en `{new_name}`\n\n{message_text}"
         
         if query:
-            print(f"DEBUG: Updating via callback query")
             await query.edit_message_text(
                 text=success_text,
                 reply_markup=main_keyboard,
                 parse_mode="Markdown"
             )
         else:
-            print(f"DEBUG: Updating via text input")
             # For text input, update main message using utility function
             await update_main_message(context, success_text, main_keyboard)
 
     else:
         # Error updating group name
         message = "❌ **Erreur**\n\nImpossible de renommer le groupe. Veuillez réessayer."
-        keyboard = [[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]]
         
-        # Clear conversation state for database error
-        context.user_data.pop('conversation_state', None)
+        # Create keyboard with retry and return options
+        keyboard = [
+            [InlineKeyboardButton("🏠 Accueil", callback_data="refresh")],
+            [InlineKeyboardButton("⬅️ Retour", callback_data="settings")]
+        ]
+        
+        # Keep conversation state active for retry
+        context.user_data['conversation_state'] = 'group_rename'
         
         if query:
             await query.edit_message_text(
@@ -333,10 +341,14 @@ async def join_group(update: Update, context: ContextTypes.DEFAULT_TYPE, target_
     # Check if group exists
     if target_group_id is None:
         message = "❌ **Groupe introuvable**\n\nCe groupe n'existe pas.\nVérifiez le nom et réessayez."
-        keyboard = [[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]]
         
-        # Clear conversation state for group not found
-        context.user_data.pop('conversation_state', None)
+        # Create keyboard with retry and return options
+        keyboard = [
+            [InlineKeyboardButton("🏠 Accueil", callback_data="refresh")],
+            [InlineKeyboardButton("⬅️ Retour", callback_data="settings")]
+        ]
+        
+        context.user_data['conversation_state'] = 'group_join'
         
         if query:
             await query.edit_message_text(
@@ -352,7 +364,12 @@ async def join_group(update: Update, context: ContextTypes.DEFAULT_TYPE, target_
     # Check if user is already in this group
     if current_group_id == target_group_id:
         message = f"ℹ️ **Déjà dans le groupe**\n\nVous êtes déjà dans `{target_group_name}`."
-        keyboard = [[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]]
+        
+        # Create keyboard with return options
+        keyboard = [
+            [InlineKeyboardButton("🏠 Accueil", callback_data="refresh")],
+            [InlineKeyboardButton("⬅️ Retour", callback_data="settings")]
+        ]
         
         # Clear conversation state for already in group
         context.user_data.pop('conversation_state', None)
@@ -431,11 +448,16 @@ async def create_new_group(update: Update, context: ContextTypes.DEFAULT_TYPE, n
     
     # Validate new name
     if not is_valid_group_name(new_name):
-        message = "❌ **Nom invalide**\n\nLe nom doit contenir 3-20 caractères et ne peut contenir que des lettres, chiffres, espaces et tirets."
-        keyboard = [[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]]
+        message = "❌ **Nom invalide**\n\nLe nom doit contenir 3-20 caractères et ne peut contenir que des lettres, chiffres, espaces et tirets. \n Veuillez réessayer."
         
-        # Clear conversation state for invalid name
-        context.user_data.pop('conversation_state', None)
+        # Create keyboard with retry and return options
+        keyboard = [
+            [InlineKeyboardButton("🏠 Accueil", callback_data="refresh")],
+            [InlineKeyboardButton("⬅️ Retour", callback_data="settings")]
+        ]
+        
+        # Keep conversation state active for retry
+        context.user_data['conversation_state'] = 'group_create'
         
         if query:
             await query.edit_message_text(
@@ -462,11 +484,16 @@ async def create_new_group(update: Update, context: ContextTypes.DEFAULT_TYPE, n
     # Check if name already exists using loaded data instead of database call
     for group_id, group_info in data.items():
         if group_info['name'] == new_name:
-            message = f"❌ **Nom déjà pris**\n\nLe groupe `{new_name}` existe déjà."
-            keyboard = [[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]]
+            message = f"❌ **Nom déjà pris**\n\nLe groupe `{new_name}` existe déjà. \n Veuillez choisir un autre nom."
             
-            # Clear conversation state for duplicate name
-            context.user_data.pop('conversation_state', None)
+            # Create keyboard with retry and return options
+            keyboard = [
+                [InlineKeyboardButton("🏠 Accueil", callback_data="refresh")],
+                [InlineKeyboardButton("⬅️ Retour", callback_data="settings")]
+            ]
+            
+            # Keep conversation state active for retry
+            context.user_data['conversation_state'] = 'group_create'
             
             if query:
                 await query.edit_message_text(

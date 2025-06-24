@@ -77,7 +77,7 @@ async def add_poop(update: Update, context: ContextTypes.DEFAULT_TYPE):
         InlineKeyboardButton("❌ Annuler", callback_data="cancel")
     ])
     
-    message = "⏰ **À quelle heure a eu lieu ce changement ?**\n\n*Ou tapez une heure manuellement (ex: 14:30)*"
+    message = "⏰ **À quelle heure a eu lieu ce changement de couche ?**\n\n*Ou tapez une heure manuellement (ex: 14:30)*"
     
     # Set conversation state for text input
     context.user_data['conversation_state'] = 'poop_time'

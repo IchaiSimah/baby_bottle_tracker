@@ -324,19 +324,15 @@ async def update_main_message(context, message_text, keyboard, parse_mode="Markd
     message_id = context.user_data.get('main_message_id')
     chat_id = context.user_data.get('chat_id')
     
-    print(f"DEBUG: update_main_message - user_id: {user_id}, message_id: {message_id}, chat_id: {chat_id}")
-    
     # For text input or other cases, try stored message ID
     if not message_id or not chat_id:
         print("No message ID or chat ID found")
         data = load_data()
         group = find_group_for_user(data, user_id)
         message_id, chat_id = get_group_message_info(data, group, user_id)
-        print(f"DEBUG: Retrieved from database - message_id: {message_id}, chat_id: {chat_id}")
     
     if message_id and chat_id:
         try:
-            print(f"DEBUG: Attempting to edit message {message_id} in chat {chat_id}")
             await context.bot.edit_message_text(
                 text=message_text,
                 chat_id=chat_id,
@@ -344,15 +340,12 @@ async def update_main_message(context, message_text, keyboard, parse_mode="Markd
                 reply_markup=keyboard,
                 parse_mode=parse_mode
             )
-            print("Message updated successfully")
             return True
         except Exception as e:
             error_msg = str(e)
             if "Message is not modified" in error_msg:
-                print(f"Message is not modified {error_msg}")
                 return True
             else:
-                print(f"Failed to edit main message: {e}")
                 # Clear invalid message ID
                 data = load_data()
                 group = find_group_for_user(data, user_id)
@@ -370,9 +363,7 @@ async def ensure_main_message_exists(update, context, data, group):
     message_text, keyboard = get_main_message_content(data, group)
     # Try to update existing message first
     if await update_main_message(context, message_text, keyboard):
-        print("Message updated successfully")
         return
-    print("No existing message or update failed, creating new one")
     # If no existing message or update failed, create new one
     if hasattr(update, 'callback_query') and update.callback_query:
         sent_message = await update.callback_query.edit_message_text(

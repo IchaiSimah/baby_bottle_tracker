@@ -33,13 +33,15 @@ async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     td = data[group_id].get("time_difference", 0)
     if td is None:
         td = 0
+    last_bottle = data[group_id].get("last_bottle", 120)
     time_difference = td
     adjusted_time = datetime.now(ZoneInfo("UTC")) + timedelta(hours=time_difference)
     
     message = "⚙️ **Paramètres de votre suivi** 🔧\n\n"
     message += f"**📱 Affichage principal :**\n"
     message += f"• 🍼 Biberons affichés : {bottles_to_show}\n"
-    message += f"• 💩 Changements affichés : {poops_to_show}\n\n"
+    message += f"• 💩 Changements de couches affichés : {poops_to_show}\n"
+    message += f"• 🍼 Dernier biberon : {last_bottle}ml\n\n"
     message += f"**🕐 Fuseau horaire :**\n"
     message += f"• ⏰ Décalage : {time_difference:+d}h\n"
     message += f"• 🕐 Heure actuelle : {adjusted_time.strftime('%H:%M')}\n\n"
@@ -49,12 +51,10 @@ async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         [
             InlineKeyboardButton(f"🍼 Biberons : {bottles_to_show}", callback_data="setting_bottles"),
-            InlineKeyboardButton(f"💩 Changements : {poops_to_show}", callback_data="setting_poops")
+            InlineKeyboardButton(f"💩 Couches: {poops_to_show}", callback_data="setting_poops")
         ],
         [
-            
-        ],
-        [
+            InlineKeyboardButton(f"🍼 Taille biberon", callback_data="setting_last_bottle"),
             InlineKeyboardButton("🕐 Changer l'heure", callback_data="setting_timezone")
         ],
         [
@@ -308,6 +308,45 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="Markdown"
         )
+    
+    elif setting == "last_bottle":
+        # Show quick choices for last bottle + manual input
+        current = data[group_id].get("last_bottle", 120)
+        quick_choices = [current + 10, current + 20, current + 30, current + 40]
+        keyboard = []
+        for value in quick_choices:
+            text = f"{value}ml {'✅' if value == current else ''}"
+            keyboard.append([InlineKeyboardButton(text, callback_data=f"set_last_bottle_{value}")])
+        keyboard.append([InlineKeyboardButton("✏️ Saisir manuellement", callback_data="manual_last_bottle_input")])
+        keyboard.append([InlineKeyboardButton("❌ Annuler", callback_data="settings")])
+        message = f"🍼 **Définir la valeur du dernier biberon (ml)**\n\nActuel : {current}ml\n\nChoisissez une valeur ou saisissez-la manuellement."
+        await query.edit_message_text(
+            text=message,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown"
+        )
+    elif setting.startswith("set_last_bottle_"):
+        value = int(setting.replace("set_last_bottle_", ""))
+        data[group_id]["last_bottle"] = value
+        update_group(int(group_id), data[group_id])
+        invalidate_user_cache(user_id)
+        data = load_data()
+        message = f"✅ Taille du biberon mis à jour : {value}ml"
+        keyboard = [[InlineKeyboardButton("🏠 Retour aux paramètres", callback_data="settings")]]
+        await query.edit_message_text(
+            text=message,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown"
+        )
+    elif setting == "manual_last_bottle_input":
+        context.user_data['conversation_state'] = 'last_bottle_input'
+        message = "✏️ **Saisissez la taille du biberon (en ml, ex: 120)**"
+        keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="settings")]]
+        await query.edit_message_text(
+            text=message,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown"
+        )
 
 async def handle_timezone_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE, time_str: str):
     """Handle manual timezone text input"""
@@ -356,6 +395,29 @@ async def handle_timezone_text_input(update: Update, context: ContextTypes.DEFAU
                  f"**Format attendu:** HH:MM ou H:MM\n" \
                  f"**Exemples:** 14:30, 7:30\n\n" \
                  f"veuillez réessayer en entrant l'heure au format attendu"
+        keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="settings")]]
+        await ensure_main_message_exists(update, context, data, group_id)
+        await update_main_message(context, message, InlineKeyboardMarkup(keyboard))
+
+async def handle_last_bottle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE, value_str: str):
+    user_id = update.effective_user.id
+    data = load_data()
+    group_id = find_group_for_user(data, user_id)
+    try:
+        value = int(value_str.strip())
+        if value <= 0:
+            raise ValueError
+        data[group_id]["last_bottle"] = value
+        update_group(int(group_id), data[group_id])
+        invalidate_user_cache(user_id)
+        data = load_data()
+        context.user_data.pop('conversation_state', None)
+        message = f"✅ Dernier biberon mis à jour : {value}ml"
+        keyboard = [[InlineKeyboardButton("🏠 Retour aux paramètres", callback_data="settings")]]
+        await ensure_main_message_exists(update, context, data, group_id)
+        await update_main_message(context, message, InlineKeyboardMarkup(keyboard))
+    except Exception:
+        message = "❌ Merci d'entrer une valeur numérique valide (ex: 120)."
         keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="settings")]]
         await ensure_main_message_exists(update, context, data, group_id)
         await update_main_message(context, message, InlineKeyboardMarkup(keyboard)) 

@@ -174,7 +174,7 @@ async def handle_bottle_time(update: Update, context: ContextTypes.DEFAULT_TYPE,
         
         # Create amount buttons
         keyboard = []
-        amounts = [last_bottle, last_bottle - 20, last_bottle - 10, last_bottle + 10, last_bottle + 20]
+        amounts = [last_bottle, last_bottle - 10, last_bottle - 20, last_bottle -30]
         amounts = list(dict.fromkeys(amounts))  # Remove duplicates while preserving order
         
         # Create rows of 2 buttons each
@@ -187,10 +187,8 @@ async def handle_bottle_time(update: Update, context: ContextTypes.DEFAULT_TYPE,
         
         # Add cancel button
         keyboard.append([InlineKeyboardButton("❌ Annuler", callback_data="cancel")])
-        if no_last_bottle:
-            message = f"🍼 **Quelle quantité a été bue ? (en ml)**\n\n*Ou tapez une quantité manuellement (ex: 110)*"
-        else:
-            message = f"🍼 **Quelle quantité a été bue ? (en ml)**\n\nDernier biberon : {last_bottle}ml\n\n*Ou tapez une quantité manuellement (ex: 110)*"
+
+        message = f"🍼 **Quelle quantité a été bue ? (en ml)**\n\n*Ou tapez une quantité manuellement (ex: 110)*"
         
         # Set conversation state for text input
         context.user_data['conversation_state'] = 'bottle_amount'

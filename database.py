@@ -49,10 +49,8 @@ def get_user_group_id(user_id: int) -> Optional[int]:
     """Get group ID for a specific user - much faster than loading all groups"""
     try:
         client = get_supabase_client()
-        # Users are stored as integers in the database
-        print(f"test1: {user_id}")
+        # Users are stored as strings in the database to handle large Telegram IDs
         response = client.table(GROUPS_TABLE).select("id").contains("users", [str(user_id)]).execute()
-        print(f"test2: {response.data}")
         if response.data:
             return response.data[0]['id']
         return None
@@ -83,7 +81,7 @@ def get_group_data_for_user(user_id: int) -> Optional[Dict]:
         poop_response = client.table(POOP_TABLE).select("*").eq('group_id', group_id).order('time', desc=True).limit(5).execute()
         
         # Get user message info
-        messages_response = client.table(USER_MESSAGES_TABLE).select("*").eq('group_id', group_id).eq('user_id', user_id).execute()
+        messages_response = client.table(USER_MESSAGES_TABLE).select("*").eq('group_id', group_id).eq('user_id', str(user_id)).execute()
         
         # Format entries
         entries = []
@@ -329,11 +327,11 @@ def create_group(group_name: str, user_id: int) -> bool:
     try:
         client = get_supabase_client()
         
-        # Create group
+        # Create group - store user_id as string to handle large Telegram IDs
         client.table(GROUPS_TABLE).insert({
             'name': group_name,
-            'users': [user_id],
-            'time_difference': 0,
+            'users': [str(user_id)],
+            'time_difference': 3,
             'bottles_to_show': 5,
             'poops_to_show': 1
         }).execute()
@@ -352,19 +350,19 @@ def update_group(group_id: int, group_data: Dict) -> bool:
     try:
         client = get_supabase_client()
         
-        # Ensure users are stored as integers
+        # Ensure users are stored as strings to handle large Telegram IDs
         users = group_data.get('users', [])
-        int_users = []
+        str_users = []
         for user in users:
             try:
-                int_users.append(int(user))
+                str_users.append(str(user))
             except (ValueError, TypeError):
                 print(f"Warning: Invalid user ID in group data: {user}")
                 continue
         
         # Update group basic info
         client.table(GROUPS_TABLE).update({
-            'users': int_users,
+            'users': str_users,
             'time_difference': group_data.get('time_difference', 0),
             'last_bottle': group_data.get('last_bottle'),
             'bottles_to_show': group_data.get('bottles_to_show', 5),
@@ -406,11 +404,10 @@ def update_group(group_id: int, group_data: Dict) -> bool:
         if group_data.get('user_messages'):
             messages_data = []
             for user_id_str, msg_data in group_data['user_messages'].items():
-                # Convert string key back to int for database
-                user_id_int = int(user_id_str)
+                # Keep user_id as string for database
                 messages_data.append({
                     'group_id': group_id,
-                    'user_id': user_id_int,
+                    'user_id': user_id_str,
                     'main_message_id': msg_data['main_message_id'],
                     'main_chat_id': msg_data['main_chat_id']
                 })

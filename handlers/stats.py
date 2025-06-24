@@ -3,13 +3,21 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from utils import load_data, find_group_for_user, create_personal_group, save_data, load_user_stats, invalidate_user_cache
 import os
+import requests
 
 async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show statistics for the last 5 days"""
     query = update.callback_query
+    if not query:
+        return
+    
     await query.answer()
     
-    user_id = update.effective_user.id
+    user = update.effective_user
+    if not user:
+        return
+    
+    user_id = user.id
     
     # Use optimized stats loading
     stats_data = load_user_stats(user_id, 5)
@@ -118,38 +126,22 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def generate_ai_summary(stats):
     """Generate an AI summary using Gemini if available"""
     try:
-        # Check if Gemini API is available
-        gemini_api_key = os.getenv("GEMINI_API_KEY")
-        if not gemini_api_key:
+        GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+        if not GEMINI_API_KEY:
             print("GEMINI_API_KEY not found in environment variables")
             return None
+
+        # Try different models in order of preference (higher quota first)
+        models_to_try = [
+            "gemini-2.5-flash-lite-preview-06-17",  # New model with 1000 requests/day quota
+            "gemini-2.5-flash-latest",  # Alternative 2.5 model name
+            "gemini-1.5-pro",  # Higher quota than flash
+            "gemini-1.5-flash-latest",  # Original model
+            "gemini-1.5-flash",  # Alternative flash model
+            "gemini-pro"  # Legacy model
+        ]
         
-        print(f"Gemini API key found: {gemini_api_key[:10]}...")
-        
-        # Import Gemini
-        import google.generativeai as genai
-        
-        genai.configure(api_key=gemini_api_key)
-        
-        # Try different models in order of preference
-        models_to_try = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro']
-        model = None
-        
-        for model_name in models_to_try:
-            try:
-                print(f"Trying model: {model_name}")
-                model = genai.GenerativeModel(model_name)
-                # Test the model with a simple request
-                test_response = model.generate_content("Test")
-                print(f"✅ Model {model_name} works!")
-                break
-            except Exception as e:
-                print(f"❌ Model {model_name} failed: {e}")
-                continue
-        
-        if not model:
-            print("❌ No working Gemini model found")
-            return None
+        url_base = "https://generativelanguage.googleapis.com/v1beta/models"
         
         # Prepare data for AI
         summary_data = []
@@ -176,12 +168,74 @@ async def generate_ai_summary(stats):
         Exemple de format : "Votre bébé montre une belle régularité avec X biberons par jour en moyenne."
         """
         
-        print("Sending request to Gemini...")
-        response = model.generate_content(prompt)
-        result = response.text.strip()
-        print(f"Gemini response: {result}")
+        # Properly format the JSON request
+        request_data = {
+            "contents": [
+                {
+                    "parts": [
+                        {
+                            "text": prompt
+                        }
+                    ]
+                }
+            ]
+        }
         
-        return result
+        # Try each model until one works
+        for model_name in models_to_try:
+            try:
+                url = f"{url_base}/{model_name}:generateContent"
+                params = {"key": GEMINI_API_KEY}
+                
+                print(f"Trying model: {model_name}")
+                response = requests.post(
+                    url, 
+                    params=params, 
+                    json=request_data,
+                    headers={"Content-Type": "application/json"},
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    # Extract the text from the response
+                    if 'candidates' in result and len(result['candidates']) > 0:
+                        candidate = result['candidates'][0]
+                        if 'content' in candidate and 'parts' in candidate['content']:
+                            parts = candidate['content']['parts']
+                            if len(parts) > 0 and 'text' in parts[0]:
+                                ai_text = parts[0]['text'].strip()
+                                print(f"✅ Success with model {model_name}: {ai_text}")
+                                return ai_text
+                    
+                    print(f"Unexpected response format from {model_name}: {result}")
+                    continue
+                    
+                elif response.status_code == 429:
+                    print(f"❌ Quota exceeded for model {model_name}, trying next model...")
+                    continue
+                    
+                elif response.status_code == 404:
+                    print(f"❌ Model {model_name} not found (404)")
+                    print(f"Response: {response.text}")
+                    continue
+                    
+                elif response.status_code == 400:
+                    print(f"❌ Bad request for model {model_name} (400)")
+                    print(f"Response: {response.text}")
+                    continue
+                    
+                else:
+                    print(f"❌ Error with model {model_name}: {response.status_code}")
+                    print(f"Response: {response.text}")
+                    continue
+                    
+            except Exception as e:
+                print(f"❌ Exception with model {model_name}: {e}")
+                continue
+        
+        print("❌ All models failed")
+        return None
         
     except ImportError as e:
         print(f"Gemini library not installed: {e}")
