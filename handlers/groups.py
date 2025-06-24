@@ -28,7 +28,7 @@ async def show_groups_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context._cached_data = data
     
     if not group_id or group_id not in data:
-        error_msg = "❌ Erreur : impossible de trouver ou créer votre groupe personnel. Merci de réessayer plus tard."
+        error_msg = "❌ Oups ! Impossible de trouver ou créer votre groupe personnel pour le moment. Veuillez réessayer plus tard."
         await query.edit_message_text(error_msg)
         return
     
@@ -37,16 +37,16 @@ async def show_groups_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     group_name = group_info.get('name', str(group_id))
     member_count = len(group_info.get("users", []))
     
-    message = f"👥 **Gestion des Groupes**\n\n"
-    message += f"**Groupe actuel :** `{group_name}`\n"
-    message += f"**Membres :** {member_count}\n"
+    message = f"👥 **Gestion des Groupes** 🏘️\n\n"
+    message += f"**🏠 Groupe actuel :** `{group_name}`\n"
+    message += f"**👤 Membres :** {member_count}\n"
     
     # Convert group_id to string for startswith check
     group_id_str = str(group_id)
     if group_id_str.startswith("group_"):
-        message += "\n*Vous êtes dans un groupe personnel*\n"
+        message += "\n*Vous êtes dans un groupe personnel* 👤\n"
     else:
-        message += "\n*Vous êtes dans un groupe partagé*\n"
+        message += "\n*Vous êtes dans un groupe partagé* 👥\n"
     
     # Create keyboard
     keyboard = [
@@ -125,7 +125,7 @@ async def show_rename_group(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         data = load_data()
         context._cached_data = data
     
-    message = f"✏️ **Renommer le groupe**\n\n"
+    message = f"✏️ **Renommer le groupe** 🏷️\n\n"
     message += f"Groupe actuel : `{data[current_group_id]['name']}`\n\n"
     message += "*Tapez le nouveau nom du groupe :*\n"
     message += "• 3-20 caractères\n"
@@ -147,7 +147,7 @@ async def show_join_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show join group interface"""
     query = update.callback_query
     
-    message = "🔗 **Rejoindre un groupe**\n\n"
+    message = "🔗 **Rejoindre un groupe** 👥\n\n"
     message += "*Tapez le nom exact du groupe à rejoindre :*\n"
     message += "• Le nom doit correspondre exactement\n"
     message += "• Respectez les majuscules/minuscules\n"
@@ -168,7 +168,7 @@ async def show_create_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show create group interface"""
     query = update.callback_query
     
-    message = "➕ **Créer un nouveau groupe**\n\n"
+    message = "➕ **Créer un nouveau groupe** 🆕\n\n"
     message += "*Tapez le nom du nouveau groupe :*\n"
     message += "• 3-20 caractères\n"
     message += "• Lettres, chiffres, espaces, tirets\n"

@@ -16,7 +16,7 @@ def get_main_message_content(data, group_id):
     """Generate the main message content with last 5 bottles and last poop"""
     # Handle case where group_id might be None or not in data
     if not group_id or group_id not in data:
-        return "❌ Erreur : impossible de charger les données.", InlineKeyboardMarkup([[
+        return "❌ Oups ! Impossible de charger vos données pour le moment. Veuillez réessayer.", InlineKeyboardMarkup([[
             InlineKeyboardButton("🔄 Actualiser", callback_data="refresh")
         ]])
     
@@ -28,33 +28,33 @@ def get_main_message_content(data, group_id):
     bottles_to_show = group_data.get("bottles_to_show", 5)
     poops_to_show = group_data.get("poops_to_show", 1)
     
-    message = "🍼 **Baby Bottle Tracker**\n\n"
+    message = "🍼 **Suivi Bébé - Tableau de Bord**\n\n"
     
     # Add group name to the message
     group_name = group_data.get('name', 'Groupe inconnu')
-    message += f"**Groupe :** `{group_name}`\n\n"
+    message += f"**👥 Groupe :** `{group_name}`\n\n"
     
     # Show last bottles
     if entries:
         last_entries = entries[:bottles_to_show]
-        message += f"🍼 **Derniers biberons:**\n"
+        message += f"🍼 **Derniers biberons :**\n"
         entries_text = ""
         for entry in last_entries:
             if isinstance(entry['time'], datetime):
                 time_str = entry['time'].strftime('%d-%m-%Y %H:%M')
             else:
                 time_str = str(entry['time'])
-            entries_text += f"`{time_str}` - *{entry['amount']}ml*\n"
+            entries_text += f"`{time_str}` - *{entry['amount']}ml* 🍼\n"
         message += entries_text
     else:
-        message += "_Aucun biberon enregistré_\n"
+        message += "_Aucun biberon enregistré pour le moment_ 📝\n"
     
     message += "\n"
     
     # Show last poop(s)
     if poop:
         last_poops = poop[:poops_to_show]
-        message += f"💩 **Dernier{'s' if poops_to_show > 1 else ''} caca{'s' if poops_to_show > 1 else ''}:**\n"
+        message += f"💩 **Dernier{'s' if poops_to_show > 1 else ''} caca{'s' if poops_to_show > 1 else ''} :**\n"
         poop_text = ""
         for p in last_poops:
             if isinstance(p['time'], datetime):
@@ -64,10 +64,10 @@ def get_main_message_content(data, group_id):
             poop_text += f"`{poop_time}`"
             if p.get('info'):
                 poop_text += f" _{p['info']}_"
-            poop_text += "\n"
+            poop_text += " 💩\n"
         message += poop_text
     else:
-        message += "_Aucun caca enregistré_\n"
+        message += "_Aucun caca enregistré pour le moment_ 📝\n"
     
     # Create inline keyboard
     keyboard = [
@@ -77,7 +77,7 @@ def get_main_message_content(data, group_id):
         ],
         [
             InlineKeyboardButton("💩 Caca", callback_data="add_poop"),
-            InlineKeyboardButton("📊 Stats", callback_data="stats")
+            InlineKeyboardButton("📊 Statistiques", callback_data="stats")
         ],
         [
             InlineKeyboardButton("⚙️ Paramètres", callback_data="settings")
@@ -89,7 +89,7 @@ def get_main_message_content_for_user(user_id: int):
     """Optimized version that loads only user-specific data"""
     data = load_user_data(user_id)
     if not data:
-        return "❌ Erreur : impossible de charger vos données.", InlineKeyboardMarkup([[
+        return "❌ Oups ! Impossible de charger vos données pour le moment. Veuillez réessayer.", InlineKeyboardMarkup([[
             InlineKeyboardButton("🔄 Actualiser", callback_data="refresh")
         ]])
     
@@ -109,14 +109,14 @@ async def last(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data[group]["poop"] = []
     poop = data[group]["poop"]
     if not entries:
-        await update.message.reply_text("Aucun biberon enregistré dans votre groupe.")
+        await update.message.reply_text("Aucun biberon enregistré dans votre groupe pour le moment.")
     else:
         last_entry = entries[-1]
         formatted_time = format_time(last_entry['time'])
-        await update.message.reply_text(f"🍼 Dernier biberon: {last_entry['amount']}ml à {formatted_time}")
+        await update.message.reply_text(f"🍼 Dernier biberon : {last_entry['amount']}ml à {formatted_time}")
     if poop:
         last_poop = poop[-1]
-        message = "💩 *Dernier caca:*\n"
+        message = "💩 *Dernier changement :*\n"
         formatted_time = format_time(last_poop['time'])
         message += f"`{formatted_time} "
         if last_poop['info']:
@@ -136,11 +136,11 @@ async def list_biberons_and_poop(update: Update, context: ContextTypes.DEFAULT_T
         data[group]["poop"] = []
     poop = data[group]["poop"]
     if not entries and not poop:
-        await update.message.reply_text("Aucun biberon ou caca enregistré.")
+        await update.message.reply_text("Aucun biberon ou changement enregistré pour le moment.")
         return
     if entries:
         last_entries = entries[-4:]
-        message = "🍼 *Liste des 4 derniers biberons:*\n\n"
+        message = "🍼 *Liste des 4 derniers biberons :*\n\n"
     for i, entry in enumerate(last_entries, 1):
         formatted_time = format_time(entry['time'])
         amount = f"{entry['amount']:>3}ml"
@@ -150,7 +150,7 @@ async def list_biberons_and_poop(update: Update, context: ContextTypes.DEFAULT_T
     await update.message.reply_text(message, parse_mode="Markdown")
     if poop:
         last_poop = poop[-1]
-        message = "💩 *Dernier caca:*\n"
+        message = "💩 *Dernier changement :*\n"
         formatted_time = format_time(last_poop['time'])
         message += f"`{formatted_time} "
         if last_poop['info']:
@@ -167,4 +167,4 @@ async def total(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     today = datetime.now().strftime("%d-%m-%Y")
     total_ml = sum(entry["amount"] for entry in data[group]["entries"] if entry["time"].strftime("%d-%m-%Y") == today)
-    await update.message.reply_text(f"📊 Total aujourd'hui : {total_ml}ml")
+    await update.message.reply_text(f"📊 Total aujourd'hui : {total_ml}ml 🍼")

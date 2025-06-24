@@ -45,7 +45,7 @@ async def start(update, context):
             data = load_user_data(user_id)
     
     if not data:
-        error_msg = "❌ Erreur : impossible de trouver ou créer votre groupe personnel. Merci de réessayer plus tard."
+        error_msg = "❌ Oups ! Impossible de trouver ou créer votre groupe personnel pour le moment. Merci de réessayer plus tard."
         if hasattr(update, 'message') and update.message:
             await update.message.reply_text(error_msg)
         elif hasattr(update, 'callback_query') and update.callback_query:
@@ -74,6 +74,7 @@ async def start(update, context):
         print(f"Failed to delete user command message: {e}")
 
 async def help_command(update, context):
+    """Show help information in the main message"""
     user_id = update.effective_user.id
     context.user_data['user_id'] = user_id  # Store user_id for utility functions
     
@@ -90,7 +91,7 @@ async def help_command(update, context):
             data = load_user_data(user_id)
     
     if not data:
-        error_msg = "❌ Erreur : impossible de trouver ou créer votre groupe personnel. Merci de réessayer plus tard."
+        error_msg = "❌ Oups ! Impossible de trouver ou créer votre groupe personnel pour le moment. Merci de réessayer plus tard."
         if hasattr(update, 'message') and update.message:
             await update.message.reply_text(error_msg)
         elif hasattr(update, 'callback_query') and update.callback_query:
@@ -101,13 +102,13 @@ async def help_command(update, context):
     group_id = list(data.keys())[0]
     
     # Create help message with return button
-    help_message = "👋 **Baby Bottle Tracker Bot**\n\n" \
-                  "**Fonctionnalités principales:**\n" \
+    help_message = "👋 **Baby Bottle Tracker Bot** 🍼\n\n" \
+                  "**✨ Fonctionnalités principales :**\n" \
                   "• 🍼 Ajouter/supprimer des biberons\n" \
-                  "• 💩 Enregistrer les selles\n" \
+                  "• 💩 Enregistrer les changements\n" \
                   "• 📊 Voir les statistiques\n" \
                   "• ⚙️ Paramètres personnalisables\n\n" \
-                  "**Utilisation:**\n" \
+                  "**🎯 Utilisation :**\n" \
                   "Utilisez les boutons dans le message principal pour naviguer.\n" \
                   "Toutes les actions se font dans le même message !"
     
@@ -116,9 +117,11 @@ async def help_command(update, context):
         InlineKeyboardButton("🏠 Retour", callback_data="refresh")
     ]])
     
-    # Try to update existing main message, or create new one
+    # Get existing main message info
     message_id, chat_id = get_group_message_info(data, group_id, user_id)
+    
     if message_id and chat_id:
+        # Try to edit existing main message
         try:
             await context.bot.edit_message_text(
                 text=help_message,
@@ -129,7 +132,7 @@ async def help_command(update, context):
             )
         except Exception as e:
             print(f"Failed to edit main message with help: {e}")
-            # Fallback: create new message
+            # If editing fails, create a new message
             sent_message = await update.message.reply_text(
                 help_message,
                 reply_markup=keyboard,
@@ -174,7 +177,7 @@ async def button_handler(update, context):
             data = load_user_data(user_id)
     
     if not data:
-        error_msg = "❌ Erreur : impossible de trouver ou créer votre groupe personnel. Merci de réessayer plus tard."
+        error_msg = "❌ Oups ! Impossible de trouver ou créer votre groupe personnel pour le moment. Merci de réessayer plus tard."
         if hasattr(update, 'message') and update.message:
             await update.message.reply_text(error_msg)
         elif hasattr(update, 'callback_query') and update.callback_query:
@@ -374,14 +377,19 @@ async def performance_command(update, context):
 async def set_commands(app):
     commands = [
         BotCommand("start", "Démarrer le bot"),
-        BotCommand("help", "Afficher l'aide"),
-        BotCommand("performance", "Afficher les statistiques de performance"),
+        BotCommand("help", "Afficher l'aide")
     ]
     await app.bot.set_my_commands(commands)
 
 async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle text input for non-conversation cases"""
+    # Check if update and user are valid
+    if not update or not update.effective_user:
+        return
+    
     user_id = update.effective_user.id
+    if not context.user_data:
+        context.user_data = {}
     context.user_data['user_id'] = user_id  # Store user_id for utility functions
     
     # Use optimized data loading
@@ -409,23 +417,24 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         try:
             # Send a temporary help message that will be deleted after a few seconds
-            sent_message = await update.message.reply_text(
-                help_message,
-                parse_mode="Markdown"
-            )
-            
-            # Delete the help message after 3 seconds
-            import asyncio
-            await asyncio.sleep(3)
-            try:
-                await context.bot.delete_message(chat_id=sent_message.chat_id, message_id=sent_message.message_id)
-            except Exception as e:
-                print(f"Failed to delete help message: {e}")
+            if update.message:
+                sent_message = await update.message.reply_text(
+                    help_message,
+                    parse_mode="Markdown"
+                )
+                
+                # Delete the help message after 3 seconds
+                import asyncio
+                await asyncio.sleep(3)
+                try:
+                    await context.bot.delete_message(chat_id=sent_message.chat_id, message_id=sent_message.message_id)
+                except Exception as e:
+                    print(f"Failed to delete help message: {e}")
         except Exception as e:
             print(f"Error sending help message: {e}")
         
         # Delete the user's message for clean chat
-        if update.message:
+        if update.message and update.effective_chat:
             try:
                 await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=update.message.message_id)
             except Exception as e:
@@ -439,6 +448,9 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['chat_id'] = chat_id
     
     state = context.user_data['conversation_state']
+    if not update.message or not update.message.text:
+        return
+    
     text = update.message.text.strip()
     
     if state == 'bottle_time':
@@ -465,7 +477,8 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Handle group rename text input
         from handlers.groups import rename_group
         current_group = find_group_for_user(data, user_id)
-        await rename_group(update, context, current_group, text)
+        if current_group:
+            await rename_group(update, context, current_group, text)
     
     elif state == 'group_create':
         # Handle group create text input
@@ -485,7 +498,7 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Don't clear conversation state here - let the individual handlers do it when conversation is complete
 
     # Delete the user's text message for a clean chat
-    if update.message:
+    if update.message and update.effective_chat:
         try:
             await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=update.message.message_id)
         except Exception as e:
@@ -497,6 +510,11 @@ def main():
         TOKEN = os.getenv("TEST_TOKEN")
     else:
         TOKEN = os.getenv("TELEGRAM_TOKEN")
+
+    if not TOKEN:
+        print("❌ Error: No Telegram token found in environment variables!")
+        print("Please set either TEST_TOKEN or TELEGRAM_TOKEN in your .env file")
+        return
 
     print("Initializing bot...")
     app = ApplicationBuilder().token(TOKEN).post_init(set_commands).build()

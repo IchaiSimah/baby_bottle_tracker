@@ -37,7 +37,7 @@ async def add_poop(update: Update, context: ContextTypes.DEFAULT_TYPE):
             data = load_user_data(user_id)
     
     if not data:
-        error_msg = "❌ Erreur : impossible de trouver ou créer votre groupe personnel. Merci de réessayer plus tard."
+        error_msg = "❌ Oups ! Impossible de trouver ou créer votre groupe personnel pour le moment. Veuillez réessayer plus tard."
         await query.edit_message_text(error_msg)
         return
     
@@ -77,7 +77,7 @@ async def add_poop(update: Update, context: ContextTypes.DEFAULT_TYPE):
         InlineKeyboardButton("❌ Annuler", callback_data="cancel")
     ])
     
-    message = "⏰ **Choisissez l'heure du caca:**\n\n*Ou tapez une heure manuellement (ex: 14:30)*"
+    message = "⏰ **À quelle heure a eu lieu ce changement ?**\n\n*Ou tapez une heure manuellement (ex: 14:30)*"
     
     # Set conversation state for text input
     context.user_data['conversation_state'] = 'poop_time'
@@ -112,7 +112,7 @@ async def handle_poop_time(update: Update, context: ContextTypes.DEFAULT_TYPE, t
         data = load_data()
         group_id = find_group_for_user(data, user_id)
         if not group_id or group_id not in data:
-            error_msg = "❌ Erreur : impossible de trouver ou créer votre groupe personnel. Merci de réessayer plus tard."
+            error_msg = "❌ Oups ! Impossible de trouver ou créer votre groupe personnel pour le moment. Veuillez réessayer plus tard."
             if hasattr(update, 'message') and update.message:
                 await update.message.reply_text(error_msg)
             elif hasattr(update, 'callback_query') and update.callback_query:
@@ -134,7 +134,7 @@ async def handle_poop_time(update: Update, context: ContextTypes.DEFAULT_TYPE, t
         else:
             normalized_time = normalize_time(time_str)
             if not is_valid_time(normalized_time):
-                error_msg = "❌ Format d'heure invalide. Veuillez réessayer."
+                error_msg = "❌ Format d'heure invalide. Veuillez réessayer avec un format comme 14:30."
                 if query:
                     await query.edit_message_text(
                         error_msg,
@@ -155,7 +155,7 @@ async def handle_poop_time(update: Update, context: ContextTypes.DEFAULT_TYPE, t
             [InlineKeyboardButton("✅ Terminer", callback_data="poop_info_none")],
             [InlineKeyboardButton("❌ Annuler", callback_data="cancel")]
         ]
-        message = f"💩 **Caca enregistré à {dt.strftime('%H:%M')}**\n\nCliquez sur 'Terminer' pour enregistrer sans information supplémentaire.\n\n*Ou tapez une information.*"
+        message = f"💩 **Changement enregistré à {dt.strftime('%H:%M')}**\n\nCliquez sur 'Terminer' pour enregistrer sans information supplémentaire.\n\n*Ou tapez une information si nécessaire.*"
         context.user_data['conversation_state'] = 'poop_info'
         if query:
             await query.edit_message_text(
@@ -169,7 +169,7 @@ async def handle_poop_time(update: Update, context: ContextTypes.DEFAULT_TYPE, t
                 set_group_message_info(data, group_id, user_id, context.user_data['main_message_id'], context.user_data['chat_id'])
         return ASK_POOP_INFO
     except Exception as e:
-        error_msg = f"❌ Erreur: {str(e)}"
+        error_msg = f"❌ Oups ! Une erreur s'est produite : {str(e)}"
         if query:
             await query.edit_message_text(
                 error_msg,

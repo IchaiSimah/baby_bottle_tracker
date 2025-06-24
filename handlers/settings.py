@@ -20,7 +20,7 @@ async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = load_data()
     
     if not group_id or group_id not in data:
-        error_msg = "❌ Erreur : impossible de trouver ou créer votre groupe personnel. Merci de réessayer plus tard."
+        error_msg = "❌ Oups ! Impossible de trouver ou créer votre groupe personnel pour le moment. Veuillez réessayer plus tard."
         if hasattr(update, 'message') and update.message:
             await update.message.reply_text(error_msg)
         elif hasattr(update, 'callback_query') and update.callback_query:
@@ -36,20 +36,20 @@ async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     time_difference = td
     adjusted_time = datetime.now(ZoneInfo("UTC")) + timedelta(hours=time_difference)
     
-    message = "⚙️ **Paramètres:**\n\n"
-    message += f"**Affichage principal:**\n"
-    message += f"• 🍼 Biberons affichés: {bottles_to_show}\n"
-    message += f"• 💩 Cacas affichés: {poops_to_show}\n\n"
-    message += f"**Fuseau horaire:**\n"
-    message += f"• 🕐 Décalage: {time_difference:+d}h\n"
-    message += f"• ⏰ Heure actuelle: {adjusted_time.strftime('%H:%M')}\n\n"
-    message += "**Modifier les paramètres:**"
+    message = "⚙️ **Paramètres de votre suivi** 🔧\n\n"
+    message += f"**📱 Affichage principal :**\n"
+    message += f"• 🍼 Biberons affichés : {bottles_to_show}\n"
+    message += f"• 💩 Changements affichés : {poops_to_show}\n\n"
+    message += f"**🕐 Fuseau horaire :**\n"
+    message += f"• ⏰ Décalage : {time_difference:+d}h\n"
+    message += f"• 🕐 Heure actuelle : {adjusted_time.strftime('%H:%M')}\n\n"
+    message += "**🔧 Modifier les paramètres :**"
     
     # Create keyboard for settings
     keyboard = [
         [
-            InlineKeyboardButton(f"🍼 Biberons: {bottles_to_show}", callback_data="setting_bottles"),
-            InlineKeyboardButton(f"💩 Cacas: {poops_to_show}", callback_data="setting_poops")
+            InlineKeyboardButton(f"🍼 Biberons : {bottles_to_show}", callback_data="setting_bottles"),
+            InlineKeyboardButton(f"💩 Changements : {poops_to_show}", callback_data="setting_poops")
         ],
         [
             
@@ -86,7 +86,7 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
     group_id = find_group_for_user(data, user_id)
     
     if not group_id or group_id not in data:
-        error_msg = "❌ Erreur : impossible de trouver ou créer votre groupe personnel. Merci de réessayer plus tard."
+        error_msg = "❌ Oups ! Impossible de trouver ou créer votre groupe personnel pour le moment. Veuillez réessayer plus tard."
         if hasattr(update, 'message') and update.message:
             await update.message.reply_text(error_msg)
         elif hasattr(update, 'callback_query') and update.callback_query:
@@ -111,7 +111,7 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
         
         keyboard.append([InlineKeyboardButton("❌ Annuler", callback_data="settings")])
         
-        message = "🍼 **Choisissez le nombre de biberons à afficher:**"
+        message = "🍼 **Combien de biberons souhaitez-vous voir affichés ?**"
         
         await query.edit_message_text(
             text=message,
@@ -137,7 +137,7 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
         
         keyboard.append([InlineKeyboardButton("❌ Annuler", callback_data="settings")])
         
-        message = "💩 **Choisissez le nombre de cacas à afficher:**"
+        message = "💩 **Combien de changements souhaitez-vous voir affichés ?**"
         
         await query.edit_message_text(
             text=message,
@@ -175,9 +175,9 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
         current_time = datetime.now(ZoneInfo("UTC")) + timedelta(hours=current_diff)
         utc_time = datetime.now(ZoneInfo("UTC"))
         
-        message = f"🕐 **Configuration de l'heure:**\n\n" \
-                 f"**Heure actuellement enregistrée:** {current_time.strftime('%H:%M')}\n" \
-                 f"**Heure UTC du serveur:** {utc_time.strftime('%H:%M')}\n\n" \
+        message = f"🕐 **Configuration de l'heure** ⏰\n\n" \
+                 f"**🕐 Heure actuellement enregistrée :** {current_time.strftime('%H:%M')}\n" \
+                 f"**🌍 Heure UTC du serveur :** {utc_time.strftime('%H:%M')}\n\n" \
                  f"**Quelle heure est-il chez vous actuellement ?**"
         
         # Create keyboard with time suggestions (current time ± 2 hours)

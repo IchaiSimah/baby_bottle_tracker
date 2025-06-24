@@ -13,9 +13,9 @@ async def save_backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             await update.message.reply_document(document=open("biberons.json", "rb"))
         except Exception as e:
-            await update.message.reply_text(f"Error sending file: {e}")
+            await update.message.reply_text(f"❌ Erreur lors de l'envoi du fichier : {e}")
     else:
-        await update.message.reply_text("You are not authorized to use this command.")
+        await update.message.reply_text("❌ Vous n'êtes pas autorisé à utiliser cette commande.")
 
 async def restore_backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id == int(ADMIN_ID):
@@ -33,8 +33,8 @@ async def restore_backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
             file = await context.bot.get_file(document.file_id)
             await file.download_to_drive("biberons.json")
 
-            await update.message.reply_text("✅ Sauvegarde restaurée avec succès.")
+            await update.message.reply_text("✅ Sauvegarde restaurée avec succès ! 🎉")
         except Exception as e:
-            await update.message.reply_text(f"Erreur pendant la restauration : {e}")
+            await update.message.reply_text(f"❌ Erreur pendant la restauration : {e}")
     else:
-        await update.message.reply_text("Tu n'es pas autorisé à utiliser cette commande.")
+        await update.message.reply_text("❌ Tu n'es pas autorisé à utiliser cette commande.")

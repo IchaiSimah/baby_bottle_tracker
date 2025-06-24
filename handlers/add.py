@@ -37,7 +37,7 @@ async def add_bottle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             data = load_user_data(user_id)
     
     if not data:
-        error_msg = "❌ Erreur : impossible de trouver ou créer votre groupe personnel. Merci de réessayer plus tard."
+        error_msg = "❌ Oups ! Impossible de trouver ou créer votre groupe personnel pour le moment. Veuillez réessayer plus tard."
         await query.edit_message_text(error_msg)
         return
     
@@ -77,7 +77,7 @@ async def add_bottle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         InlineKeyboardButton("❌ Annuler", callback_data="cancel")
     ])
     
-    message = "⏰ **Choisissez l'heure du biberon:**\n\n*Ou tapez une heure manuellement (ex: 14:30)*"
+    message = "⏰ **À quelle heure a eu lieu ce biberon ?**\n\n*Ou tapez une heure manuellement (ex: 14:30)*"
     
     # Set conversation state for text input
     context.user_data['conversation_state'] = 'bottle_time'
@@ -116,7 +116,7 @@ async def handle_bottle_time(update: Update, context: ContextTypes.DEFAULT_TYPE,
         data = load_data()
         group_id = find_group_for_user(data, user_id)
         if not group_id or group_id not in data:
-            error_msg = "❌ Erreur : impossible de trouver ou créer votre groupe personnel. Merci de réessayer plus tard."
+            error_msg = "❌ Oups ! Impossible de trouver ou créer votre groupe personnel pour le moment. Veuillez réessayer plus tard."
             if hasattr(update, 'message') and update.message:
                 await update.message.reply_text(error_msg)
             elif hasattr(update, 'callback_query') and update.callback_query:
@@ -138,7 +138,7 @@ async def handle_bottle_time(update: Update, context: ContextTypes.DEFAULT_TYPE,
         else:
             normalized_time = normalize_time(time_str)
             if not is_valid_time(normalized_time):
-                error_msg = "❌ Format d'heure invalide. Veuillez réessayer."
+                error_msg = "❌ Format d'heure invalide. Veuillez réessayer avec un format comme 14:30."
                 if query:
                     await query.edit_message_text(
                         error_msg,
@@ -188,9 +188,9 @@ async def handle_bottle_time(update: Update, context: ContextTypes.DEFAULT_TYPE,
         # Add cancel button
         keyboard.append([InlineKeyboardButton("❌ Annuler", callback_data="cancel")])
         if no_last_bottle:
-            message = f"🍼 **Choisissez la quantité (ml):**\n\n*Ou tapez une quantité manuellement (ex: 110)*"
+            message = f"🍼 **Quelle quantité a été bue ? (en ml)**\n\n*Ou tapez une quantité manuellement (ex: 110)*"
         else:
-            message = f"🍼 **Choisissez la quantité (ml):**\n\nDernier biberon: {last_bottle}ml\n\n*Ou tapez une quantité manuellement (ex: 110)*"
+            message = f"🍼 **Quelle quantité a été bue ? (en ml)**\n\nDernier biberon : {last_bottle}ml\n\n*Ou tapez une quantité manuellement (ex: 110)*"
         
         # Set conversation state for text input
         context.user_data['conversation_state'] = 'bottle_amount'

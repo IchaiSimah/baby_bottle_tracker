@@ -17,7 +17,7 @@ async def delete_bottle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = load_data()
         group_id = find_group_for_user(data, user_id)
         if not group_id or group_id not in data:
-            error_msg = "❌ Erreur : impossible de trouver ou créer votre groupe personnel. Merci de réessayer plus tard."
+            error_msg = "❌ Oups ! Impossible de trouver ou créer votre groupe personnel pour le moment. Veuillez réessayer plus tard."
             if hasattr(update, 'message') and update.message:
                 await update.message.reply_text(error_msg)
             elif hasattr(update, 'callback_query') and update.callback_query:
@@ -30,16 +30,16 @@ async def delete_bottle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if not group_data["entries"]:
         await query.edit_message_text(
-            "❌ Aucun biberon à supprimer dans votre groupe.",
+            "❌ Aucun biberon à supprimer dans votre groupe pour le moment.",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]])
         )
         return False
     last_entry = group_data["entries"][0]
     
     # Show confirmation dialog
-    message = f"🗑️ **Confirmer la suppression**\n\n"
+    message = f"🗑️ **Confirmer la suppression** ⚠️\n\n"
     message += f"Voulez-vous vraiment supprimer ce biberon ?\n\n"
-    message += f"**Dernier biberon :**\n"
+    message += f"**🍼 Dernier biberon :**\n"
     message += f"• 📅 Date : {last_entry['time'].strftime('%d-%m-%Y')}\n"
     message += f"• 🕐 Heure : {last_entry['time'].strftime('%H:%M')}\n"
     message += f"• 🍼 Quantité : {last_entry['amount']}ml\n"
@@ -75,7 +75,7 @@ async def confirm_delete_bottle(update: Update, context: ContextTypes.DEFAULT_TY
         group_id = find_group_for_user(data, user_id)
         if not group_id or not data[group_id]["entries"]:
             await query.edit_message_text(
-                "❌ Erreur : Aucun biberon à supprimer.",
+                "❌ Oups ! Aucun biberon à supprimer pour le moment.",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]])
             )
             return False
@@ -87,7 +87,7 @@ async def confirm_delete_bottle(update: Update, context: ContextTypes.DEFAULT_TY
     
     if not group_data["entries"]:
         await query.edit_message_text(
-            "❌ Erreur : Aucun biberon à supprimer.",
+            "❌ Oups ! Aucun biberon à supprimer pour le moment.",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]])
         )
         return False
@@ -101,7 +101,7 @@ async def confirm_delete_bottle(update: Update, context: ContextTypes.DEFAULT_TY
     
     # Show confirmation
     await query.edit_message_text(
-        f"✅ **Biberon supprimé !**\n\nSupprimé : {removed_entry['amount']}ml à {removed_entry['time'].strftime('%H:%M')}",
+        f"✅ **Biberon supprimé avec succès !** 🗑️\n\nSupprimé : {removed_entry['amount']}ml à {removed_entry['time'].strftime('%H:%M')}",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]])
     )
     

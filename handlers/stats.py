@@ -18,7 +18,7 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = load_data()
         group_id = find_group_for_user(data, user_id)
         if not group_id or group_id not in data:
-            error_msg = "❌ Erreur : impossible de trouver ou créer votre groupe personnel. Merci de réessayer plus tard."
+            error_msg = "❌ Oups ! Impossible de trouver ou créer votre groupe personnel pour le moment. Veuillez réessayer plus tard."
             if hasattr(update, 'message') and update.message:
                 await update.message.reply_text(error_msg)
             elif hasattr(update, 'callback_query') and update.callback_query:
@@ -56,29 +56,29 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
     
     # Generate statistics message
-    message = "📊 **Statistiques des 5 derniers jours:**\n\n"
+    message = "📊 **Statistiques des 5 derniers jours** 📈\n\n"
     
     total_bottles_5days = sum(stats[d]["bottles"] for d in stats)
     total_ml_5days = sum(stats[d]["total_ml"] for d in stats)
     total_poops_5days = sum(stats[d]["poops"] for d in stats)
     
-    message += f"**Résumé 5 jours:**\n"
+    message += f"**📋 Résumé 5 jours :**\n"
     message += f"• 🍼 {total_bottles_5days} biberons\n"
-    message += f"• 📏 {total_ml_5days}ml total\n"
-    message += f"• 💩 {total_poops_5days} cacas\n"
-    message += f"• 📈 Moyenne: {total_ml_5days//5 if total_bottles_5days > 0 else 0}ml/jour\n\n"
+    message += f"• 📏 {total_ml_5days}ml au total\n"
+    message += f"• 💩 {total_poops_5days} changements\n"
+    message += f"• 📈 Moyenne : {total_ml_5days//5 if total_bottles_5days > 0 else 0}ml/jour\n\n"
     
-    message += "**Détail par jour:**\n"
+    message += "**📅 Détail par jour :**\n"
     for date_str in sorted(stats.keys(), reverse=True):
         day_stats = stats[date_str]
         day_name = day_stats["date"].strftime("%A")[:3]  # Short day name
-        message += f"`{date_str} ({day_name}): "
+        message += f"`{date_str} ({day_name}) : "
         message += f"{day_stats['bottles']} biberons, "
         message += f"{day_stats['total_ml']}ml, "
-        message += f"{day_stats['poops']} cacas`\n"
+        message += f"{day_stats['poops']} changements`\n"
     
     # Add loading message for AI
-    message += f"\n🤖 **Analyse IA:**\n⏳ Génération en cours..."
+    message += f"\n🤖 **Analyse IA :**\n⏳ Génération en cours..."
     
     # Create keyboard
     keyboard = [
@@ -98,7 +98,7 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Update message with AI summary if available
     if ai_summary:
         # Remove loading message and add AI summary
-        message = message.replace("\n🤖 **Analyse IA:**\n⏳ Génération en cours...", f"\n🤖 **Analyse IA:**\n{ai_summary}")
+        message = message.replace("\n🤖 **Analyse IA :**\n⏳ Génération en cours...", f"\n🤖 **Analyse IA :**\n{ai_summary}")
         
         await query.edit_message_text(
             text=message,
@@ -107,7 +107,7 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     else:
         # Remove loading message if AI failed
-        message = message.replace("\n🤖 **Analyse IA:**\n⏳ Génération en cours...", "")
+        message = message.replace("\n🤖 **Analyse IA :**\n⏳ Génération en cours...", "")
         
         await query.edit_message_text(
             text=message,

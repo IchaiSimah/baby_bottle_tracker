@@ -14,7 +14,7 @@ async def time(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if td is None:
             td = 0
         adjusted_time = datetime.now(ZoneInfo("UTC")) + timedelta(hours=td)
-    await update.message.reply_text(f"L'heure du bot est : {adjusted_time.strftime('%H:%M')}")
+    await update.message.reply_text(f"🕐 L'heure du bot est : {adjusted_time.strftime('%H:%M')}")
 
 async def timeUpdate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     time_str = context.args[0]
@@ -29,4 +29,4 @@ async def timeUpdate(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data[group]["time_difference"] = diff_hour
     await save_data(data, context)
-    await update.message.reply_text(f"L'heure du bot a été mise à jour à : {time_str}")
+    await update.message.reply_text(f"✅ L'heure du bot a été mise à jour à : {time_str} 🕐")
