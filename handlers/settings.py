@@ -1,33 +1,39 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from utils import load_data, save_data, find_group_for_user, create_personal_group, normalize_time, ensure_main_message_exists, update_main_message, set_group_message_info
+from utils import load_data, save_data, find_group_for_user, create_personal_group, normalize_time, ensure_main_message_exists, update_main_message, set_group_message_info, invalidate_user_cache
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from config import TEST_MODE
+from database import update_group
 
 async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show settings menu"""
     query = update.callback_query
     await query.answer()
     
-    user_id = update.effective_user.id
     data = load_data()
-    group = find_group_for_user(data, user_id)
-    if not group:
-        await query.edit_message_text(
-            "❌ Vous n'êtes dans aucun groupe.",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("❌ Annuler", callback_data="cancel")
-            ]])
-        )
+    user_id = update.effective_user.id
+    group_id = find_group_for_user(data, user_id)
+    if not group_id:
+        group_id = create_personal_group(data, user_id)
+        await save_data(data, context)
+        data = load_data()
+    
+    if not group_id or group_id not in data:
+        error_msg = "❌ Erreur : impossible de trouver ou créer votre groupe personnel. Merci de réessayer plus tard."
+        if hasattr(update, 'message') and update.message:
+            await update.message.reply_text(error_msg)
+        elif hasattr(update, 'callback_query') and update.callback_query:
+            await update.callback_query.edit_message_text(error_msg)
         return
     
     # Get current settings
-    bottles_to_show = data[group].get("bottles_to_show", 5)
-    poops_to_show = data[group].get("poops_to_show", 1)
-    time_difference = data[group].get("time_difference", 0)
-    
-    # Calculate current adjusted time
+    bottles_to_show = data[group_id].get("bottles_to_show", 5)
+    poops_to_show = data[group_id].get("poops_to_show", 1)
+    td = data[group_id].get("time_difference", 0)
+    if td is None:
+        td = 0
+    time_difference = td
     adjusted_time = datetime.now(ZoneInfo("UTC")) + timedelta(hours=time_difference)
     
     message = "⚙️ **Paramètres:**\n\n"
@@ -75,13 +81,21 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
         # Extract setting from callback data
         setting = query.data.replace("setting_", "")
     
-    user_id = update.effective_user.id
     data = load_data()
-    group = find_group_for_user(data, user_id)
+    user_id = update.effective_user.id
+    group_id = find_group_for_user(data, user_id)
+    
+    if not group_id or group_id not in data:
+        error_msg = "❌ Erreur : impossible de trouver ou créer votre groupe personnel. Merci de réessayer plus tard."
+        if hasattr(update, 'message') and update.message:
+            await update.message.reply_text(error_msg)
+        elif hasattr(update, 'callback_query') and update.callback_query:
+            await update.callback_query.edit_message_text(error_msg)
+        return
     
     if setting == "bottles":
         # Show bottle count options
-        current = data[group].get("bottles_to_show", 5)
+        current = data[group_id].get("bottles_to_show", 5)
         keyboard = []
         
         # Create rows of 3 buttons each
@@ -107,7 +121,7 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
     
     elif setting == "poops":
         # Show poop count options
-        current = data[group].get("poops_to_show", 1)
+        current = data[group_id].get("poops_to_show", 1)
         keyboard = []
         
         # Create rows of 3 buttons each
@@ -132,26 +146,32 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
         )
     
     elif setting.startswith("set_bottles_"):
-        # Set bottle count
         count = int(setting.replace("set_bottles_", ""))
-        data[group]["bottles_to_show"] = count
-        await save_data(data, context)
-        
-        # Show confirmation and return to settings
+        data[group_id]["bottles_to_show"] = count
+        # Convert group_id to int for database function
+        update_group(int(group_id), data[group_id])
+        # Invalidate cache for this user
+        invalidate_user_cache(user_id)
+        # Recharge les données du groupe après la modification
+        data = load_data()
         await show_settings(update, context)
     
     elif setting.startswith("set_poops_"):
-        # Set poop count
         count = int(setting.replace("set_poops_", ""))
-        data[group]["poops_to_show"] = count
-        await save_data(data, context)
-        
-        # Show confirmation and return to settings
+        data[group_id]["poops_to_show"] = count
+        # Convert group_id to int for database function
+        update_group(int(group_id), data[group_id])
+        # Invalidate cache for this user
+        invalidate_user_cache(user_id)
+        # Recharge les données du groupe après la modification
+        data = load_data()
         await show_settings(update, context)
     
     elif setting == "timezone":
-        # Show current time and ask for user's local time
-        current_diff = data[group].get("time_difference", 0)
+        td = data[group_id].get("time_difference", 0)
+        if td is None:
+            td = 0
+        current_diff = td
         current_time = datetime.now(ZoneInfo("UTC")) + timedelta(hours=current_diff)
         utc_time = datetime.now(ZoneInfo("UTC"))
         
@@ -192,53 +212,41 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
         )
     
     elif setting.startswith("set_time_"):
-        # Handle time selection and calculate time difference
         time_str = setting.replace("set_time_", "")
-        
         try:
-            # Parse the selected time
             selected_time = datetime.strptime(time_str, "%H:%M").time()
             now = datetime.now(ZoneInfo("UTC"))
-            
-            # Calculate time difference
             target_hour = selected_time.hour
             current_hour = now.hour
             diff_hour = target_hour - current_hour
-            
-            # Handle day boundary cases
             if diff_hour > 12:
                 diff_hour -= 24
             elif diff_hour < -12:
                 diff_hour += 24
-            
-            # Update the time difference
-            data[group]["time_difference"] = diff_hour
-            await save_data(data, context)
-            
-            # Show confirmation
+            data[group_id]["time_difference"] = diff_hour
+            # Convert group_id to int for database function
+            update_group(int(group_id), data[group_id])
+            # Invalidate cache for this user
+            invalidate_user_cache(user_id)
+            # Recharge les données du groupe après la modification
+            data = load_data()
             adjusted_time = datetime.now(ZoneInfo("UTC")) + timedelta(hours=diff_hour)
             message = f"✅ **Heure mise à jour avec succès !**\n\n" \
                      f"**Votre heure:** {time_str}\n" \
                      f"**Heure UTC:** {now.strftime('%H:%M')}\n" \
                      f"**Décalage calculé:** {diff_hour:+d}h\n\n" \
                      f"🕐 L'heure du bot est maintenant synchronisée avec votre fuseau horaire."
-            
             keyboard = [[InlineKeyboardButton("🏠 Retour aux paramètres", callback_data="settings")]]
-            
             await query.edit_message_text(
                 text=message,
                 reply_markup=InlineKeyboardMarkup(keyboard),
                 parse_mode="Markdown"
             )
-            
         except ValueError:
-            # Invalid time format
             message = "❌ **Erreur:** Format d'heure invalide.\n\n" \
                      f"**Format attendu:** HH:MM ou H:MM\n" \
                      f"**Exemples:** 14:30, 7:30"
-            
             keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="settings")]]
-            
             await query.edit_message_text(
                 text=message,
                 reply_markup=InlineKeyboardMarkup(keyboard),
@@ -267,8 +275,7 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
         # Set group
         group = setting.replace("group_", "")
         data[group] = {}
-        await save_data(data, context)
-        
+        # No save_data here; persistence is handled elsewhere
         # Show confirmation and return to settings
         await show_settings(update, context)
     
@@ -278,6 +285,8 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
     
     elif setting == "cancel":
         # Cancel operation
+        # Clear conversation state when canceling
+        context.user_data.pop('conversation_state', None)
         await query.edit_message_text(
             "❌ Opération annulée.",
             reply_markup=InlineKeyboardMarkup([[
@@ -290,16 +299,10 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
         await show_settings(update, context)
     
     elif setting == "manual_time_input":
-        # Set up conversation state for manual time input
+        # Set the conversation state for manual timezone input
         context.user_data['conversation_state'] = 'timezone_input'
-        
-        message = "🕐 **Saisissez votre heure actuelle:**\n\n" \
-                 "**Format:** HH:MM ou H:MM\n" \
-                 "**Exemples:** 14:30, 7:30\n\n" \
-                 "💡 Tapez l'heure qu'il est chez vous actuellement."
-        
+        message = "✏️ **Saisissez l'heure locale au format HH:MM (ex: 14:30)**"
         keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="settings")]]
-        
         await query.edit_message_text(
             text=message,
             reply_markup=InlineKeyboardMarkup(keyboard),
@@ -310,34 +313,32 @@ async def handle_timezone_text_input(update: Update, context: ContextTypes.DEFAU
     """Handle manual timezone text input"""
     user_id = update.effective_user.id
     data = load_data()
-    group = find_group_for_user(data, user_id)
-    
+    group_id = find_group_for_user(data, user_id)
     try:
         # Normalize the time input
         normalized_time = normalize_time(time_str)
-        
         # Parse the input time
         selected_time = datetime.strptime(normalized_time, "%H:%M").time()
         now = datetime.now(ZoneInfo("UTC"))
-        
         # Calculate time difference
         target_hour = selected_time.hour
         current_hour = now.hour
         diff_hour = target_hour - current_hour
-        
         # Handle day boundary cases
         if diff_hour > 12:
             diff_hour -= 24
         elif diff_hour < -12:
             diff_hour += 24
-        
-        # Update the time difference
-        data[group]["time_difference"] = diff_hour
-        await save_data(data, context)
-        
+        # Update the time difference and persist to Supabase
+        data[group_id]["time_difference"] = diff_hour
+        # Convert group_id to int for database function
+        update_group(int(group_id), data[group_id])
+        # Invalidate cache for this user
+        invalidate_user_cache(user_id)
+        # Recharge les données du groupe après la modification
+        data = load_data()
         # Clear conversation state
         context.user_data.pop('conversation_state', None)
-        
         # Show confirmation
         adjusted_time = datetime.now(ZoneInfo("UTC")) + timedelta(hours=diff_hour)
         message = f"✅ **Heure mise à jour avec succès !**\n\n" \
@@ -345,29 +346,16 @@ async def handle_timezone_text_input(update: Update, context: ContextTypes.DEFAU
                  f"**Heure UTC:** {now.strftime('%H:%M')}\n" \
                  f"**Décalage calculé:** {diff_hour:+d}h\n\n" \
                  f"🕐 L'heure du bot est maintenant synchronisée avec votre fuseau horaire."
-        
         keyboard = [[InlineKeyboardButton("🏠 Retour aux paramètres", callback_data="settings")]]
-        
         # Use utility function to update main message
-        await ensure_main_message_exists(update, context, data, group)
+        await ensure_main_message_exists(update, context, data, group_id)
         await update_main_message(context, message, InlineKeyboardMarkup(keyboard))
-        # Store the message ID for future text inputs
-        if context.user_data.get('main_message_id') and context.user_data.get('chat_id'):
-            set_group_message_info(data, group, user_id, context.user_data['main_message_id'], context.user_data['chat_id'])
-            await save_data(data, context)
-        
-    except ValueError:
-        # Invalid time format
-        message = "❌ **Erreur:** Format d'heure invalide.\n\n" \
+    except Exception as e:
+
+        message = f"❌ **Erreur:** le format de l'heure est invalide\n\n" \
                  f"**Format attendu:** HH:MM ou H:MM\n" \
-                 f"**Exemples:** 14:30, 7:30"
-        
+                 f"**Exemples:** 14:30, 7:30\n\n" \
+                 f"veuillez réessayer en entrant l'heure au format attendu"
         keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="settings")]]
-        
-        # Use utility function to update main message
-        await ensure_main_message_exists(update, context, data, group)
-        await update_main_message(context, message, InlineKeyboardMarkup(keyboard))
-        # Store the message ID for future text inputs
-        if context.user_data.get('main_message_id') and context.user_data.get('chat_id'):
-            set_group_message_info(data, group, user_id, context.user_data['main_message_id'], context.user_data['chat_id'])
-            await save_data(data, context) 
+        await ensure_main_message_exists(update, context, data, group_id)
+        await update_main_message(context, message, InlineKeyboardMarkup(keyboard)) 

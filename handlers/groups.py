@@ -1,31 +1,49 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from utils import load_data, save_data, find_group_for_user, create_personal_group, delete_user_message, update_main_message, ensure_main_message_exists
+from utils import load_data, save_data, find_group_for_user, create_personal_group, delete_user_message, update_main_message, ensure_main_message_exists, invalidate_user_cache, invalidate_cache
+from database import update_group, create_group, update_group_name, get_all_groups, get_user_group_id
 import re
 
 async def show_groups_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show the groups management menu"""
+    """Show groups management menu"""
     query = update.callback_query
     await query.answer()
     
-    user_id = update.effective_user.id
-    data = load_data()
-    group = find_group_for_user(data, user_id)
+    # Use cached data if available, otherwise load once
+    data = getattr(context, '_cached_data', None)
+    if data is None:
+        data = load_data()
+        context._cached_data = data
     
-    if not group:
-        group = create_personal_group(data, user_id)
-        await save_data(data, context)
+    user_id = update.effective_user.id
+    group_id = find_group_for_user(data, user_id)
+    
+    # Only create personal group if user has no group
+    if not group_id:
+        group_id = create_personal_group(data, user_id)
+        # Invalidate cache and reload data only if group was created
+        if group_id:
+            invalidate_cache()
+            data = load_data()
+            context._cached_data = data
+    
+    if not group_id or group_id not in data:
+        error_msg = "❌ Erreur : impossible de trouver ou créer votre groupe personnel. Merci de réessayer plus tard."
+        await query.edit_message_text(error_msg)
+        return
     
     # Get current group info
-    group_info = data[group]
-    group_name = group
+    group_info = data[group_id]
+    group_name = group_info.get('name', str(group_id))
     member_count = len(group_info.get("users", []))
     
     message = f"👥 **Gestion des Groupes**\n\n"
     message += f"**Groupe actuel :** `{group_name}`\n"
     message += f"**Membres :** {member_count}\n"
     
-    if group.startswith("group_"):
+    # Convert group_id to string for startswith check
+    group_id_str = str(group_id)
+    if group_id_str.startswith("group_"):
         message += "\n*Vous êtes dans un groupe personnel*\n"
     else:
         message += "\n*Vous êtes dans un groupe partagé*\n"
@@ -37,7 +55,7 @@ async def show_groups_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("➕ Créer un groupe", callback_data="group_create")],
     ]
     
-    if not group.startswith("group_"):
+    if not group_id_str.startswith("group_"):
         keyboard.append([InlineKeyboardButton("🚪 Quitter le groupe", callback_data="group_leave")])
     
     keyboard.append([
@@ -59,18 +77,37 @@ async def handle_group_actions(update: Update, context: ContextTypes.DEFAULT_TYP
     if not action:
         action = query.data.replace("group_", "")
     
+    # Use cached data if available, otherwise load once
+    data = getattr(context, '_cached_data', None)
+    if data is None:
+        data = load_data()
+        context._cached_data = data
+    
     user_id = update.effective_user.id
-    data = load_data()
-    current_group = find_group_for_user(data, user_id)
+    group_id = find_group_for_user(data, user_id)
+    
+    # Only create personal group if user has no group
+    if not group_id:
+        group_id = create_personal_group(data, user_id)
+        # Invalidate cache and reload data only if group was created
+        if group_id:
+            invalidate_cache()
+            data = load_data()
+            context._cached_data = data
+    
+    if not group_id or group_id not in data:
+        error_msg = "❌ Erreur : impossible de trouver ou créer votre groupe personnel. Merci de réessayer plus tard."
+        await query.edit_message_text(error_msg)
+        return
     
     if action == "rename":
-        await show_rename_group(update, context, current_group)
+        await show_rename_group(update, context, group_id)
     elif action == "join":
         await show_join_group(update, context)
     elif action == "create":
         await show_create_group(update, context)
     elif action == "leave":
-        await leave_group(update, context, current_group)
+        await leave_group(update, context, group_id)
         return
 
     # Clear conversation state for other states
@@ -79,12 +116,17 @@ async def handle_group_actions(update: Update, context: ContextTypes.DEFAULT_TYP
 
     await save_data(data, context)
 
-async def show_rename_group(update: Update, context: ContextTypes.DEFAULT_TYPE, current_group: str):
+async def show_rename_group(update: Update, context: ContextTypes.DEFAULT_TYPE, current_group_id: str):
     """Show rename group interface"""
     query = update.callback_query
+    # Use data from context if available, otherwise load once
+    data = getattr(context, '_cached_data', None)
+    if data is None:
+        data = load_data()
+        context._cached_data = data
     
     message = f"✏️ **Renommer le groupe**\n\n"
-    message += f"Groupe actuel : `{current_group}`\n\n"
+    message += f"Groupe actuel : `{data[current_group_id]['name']}`\n\n"
     message += "*Tapez le nouveau nom du groupe :*\n"
     message += "• 3-20 caractères\n"
     message += "• Lettres, chiffres, espaces, tirets\n"
@@ -144,7 +186,12 @@ async def show_create_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )
 
-async def rename_group(update: Update, context: ContextTypes.DEFAULT_TYPE, current_group: str, new_name: str):
+def _clear_context_cache(context):
+    """Clear cached data from context"""
+    if hasattr(context, '_cached_data'):
+        delattr(context, '_cached_data')
+
+async def rename_group(update: Update, context: ContextTypes.DEFAULT_TYPE, current_group_id: str, new_name: str):
     """Rename the current group"""
     # Check if this is a callback query or text input
     if hasattr(update, 'callback_query') and update.callback_query:
@@ -160,25 +207,8 @@ async def rename_group(update: Update, context: ContextTypes.DEFAULT_TYPE, curre
         message = "❌ **Nom invalide**\n\nLe nom doit contenir 3-20 caractères et ne peut contenir que des lettres, chiffres, espaces et tirets."
         keyboard = [[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]]
         
-        if query:
-            await query.edit_message_text(
-                message,
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-        else:
-            # For text input, return to main using utility function
-            data = load_data()
-            user_id = update.effective_user.id
-            group = find_group_for_user(data, user_id)
-            await ensure_main_message_exists(update, context, data, group)
-        return
-    
-    data = load_data()
-    
-    # Check if name already exists
-    if new_name in data:
-        message = f"❌ **Nom déjà pris**\n\nLe groupe `{new_name}` existe déjà."
-        keyboard = [[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]]
+        # Clear conversation state for invalid name
+        context.user_data.pop('conversation_state', None)
         
         if query:
             await query.edit_message_text(
@@ -186,35 +216,94 @@ async def rename_group(update: Update, context: ContextTypes.DEFAULT_TYPE, curre
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
         else:
-            # For text input, return to main using utility function
-            group = find_group_for_user(data, update.effective_user.id)
-            await ensure_main_message_exists(update, context, data, group)
+            # For text input, update main message using utility function
+            await update_main_message(context, message, InlineKeyboardMarkup(keyboard))
         return
     
-    # Rename the group
-    group_data = data.pop(current_group)
-    data[new_name] = group_data
+    # Use cached data if available, otherwise load once
+    data = getattr(context, '_cached_data', None)
+    if data is None:
+        data = load_data()
+        context._cached_data = data
     
-    await save_data(data, context)
+    # Check if name already exists using loaded data instead of database call
+    for group_id, group_info in data.items():
+        if group_info['name'] == new_name:
+            message = f"❌ **Nom déjà pris**\n\nLe groupe `{new_name}` existe déjà."
+            keyboard = [[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]]
+            
+            # Clear conversation state for duplicate name
+            context.user_data.pop('conversation_state', None)
+            
+            if query:
+                await query.edit_message_text(
+                    message,
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+            else:
+                # For text input, update main message using utility function
+                await update_main_message(context, message, InlineKeyboardMarkup(keyboard))
+            return
     
-    # Return to main menu with success message
-    from handlers.queries import get_main_message_content
+    # Rename the group in the database
+    current_group_id_int = int(current_group_id)
     user_id = update.effective_user.id
-    group = find_group_for_user(data, user_id)
-    message_text, main_keyboard = get_main_message_content(data, group)
-    
-    if query:
-        await query.edit_message_text(
-            text=message_text,
-            reply_markup=main_keyboard,
-            parse_mode="Markdown"
-        )
-    else:
-        # For text input, update main message using utility function
-        await ensure_main_message_exists(update, context, data, group)
-        await update_main_message(context, message_text, main_keyboard)
+    print(f"DEBUG: Renaming group {current_group_id_int} to '{new_name}'")
+    if update_group_name(current_group_id_int, new_name):
+        print(f"DEBUG: Group renamed successfully in database")
+        # Invalidate ALL caches to ensure fresh data
+        invalidate_cache()  # Invalidate global cache
+        invalidate_user_cache(user_id)  # Invalidate user cache
+        _clear_context_cache(context)  # Clear context cache
+        
+        # Recharge les données du groupe après la modification (avec cache invalidé)
+        data = load_data()
+        print(f"DEBUG: Reloaded data, group name is now: {data.get(str(current_group_id_int), {}).get('name', 'NOT FOUND')}")
+        # Clear conversation state after successful rename
+        context.user_data.pop('conversation_state', None)
+        # Return to main menu
+        from handlers.queries import get_main_message_content
+        group_id = find_group_for_user(data, user_id)
+        print(f"DEBUG: Found group_id: {group_id}")
+        message_text, main_keyboard = get_main_message_content(data, group_id)
+        print(f"DEBUG: Generated message with group name: {data.get(group_id, {}).get('name', 'NOT FOUND')}")
+        
+        # Add confirmation message to avoid "Message is not modified" error
+        success_text = f"✅ **Groupe renommé !**\n\nLe groupe a été renommé en `{new_name}`\n\n{message_text}"
+        
+        if query:
+            print(f"DEBUG: Updating via callback query")
+            await query.edit_message_text(
+                text=success_text,
+                reply_markup=main_keyboard,
+                parse_mode="Markdown"
+            )
+        else:
+            print(f"DEBUG: Updating via text input")
+            # For text input, update main message using utility function
+            await update_main_message(context, success_text, main_keyboard)
 
-async def join_group(update: Update, context: ContextTypes.DEFAULT_TYPE, target_group: str):
+    else:
+        # Error updating group name
+        message = "❌ **Erreur**\n\nImpossible de renommer le groupe. Veuillez réessayer."
+        keyboard = [[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]]
+        
+        # Clear conversation state for database error
+        context.user_data.pop('conversation_state', None)
+        
+        if query:
+            await query.edit_message_text(
+                message,
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        else:
+            # For text input, update main message with error
+            data = load_data()
+            user_id = update.effective_user.id
+            group_id = find_group_for_user(data, user_id)
+            await update_main_message(context, message, InlineKeyboardMarkup(keyboard))
+
+async def join_group(update: Update, context: ContextTypes.DEFAULT_TYPE, target_group_name: str):
     """Join an existing group"""
     # Check if this is a callback query or text input
     if hasattr(update, 'callback_query') and update.callback_query:
@@ -225,30 +314,29 @@ async def join_group(update: Update, context: ContextTypes.DEFAULT_TYPE, target_
         # Delete user message for clean chat
         await delete_user_message(context, update.effective_chat.id, update.message.message_id)
     
-    data = load_data()
+    # Use cached data if available, otherwise load once
+    data = getattr(context, '_cached_data', None)
+    if data is None:
+        data = load_data()
+        context._cached_data = data
+    
     user_id = update.effective_user.id
-    current_group = find_group_for_user(data, user_id)
+    current_group_id = find_group_for_user(data, user_id)
+    
+    # Find the target group by name
+    target_group_id = None
+    for group_id, group_info in data.items():
+        if group_info.get('name') == target_group_name:
+            target_group_id = group_id
+            break
     
     # Check if group exists
-    if target_group not in data:
+    if target_group_id is None:
         message = "❌ **Groupe introuvable**\n\nCe groupe n'existe pas.\nVérifiez le nom et réessayez."
         keyboard = [[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]]
         
-        if query:
-            await query.edit_message_text(
-                message,
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-        else:
-            # For text input, return to main using utility function
-            group = find_group_for_user(data, user_id)
-            await ensure_main_message_exists(update, context, data, group)
-        return
-    
-    # Check if user is already in this group
-    if current_group == target_group:
-        message = f"ℹ️ **Déjà dans le groupe**\n\nVous êtes déjà dans `{target_group}`."
-        keyboard = [[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]]
+        # Clear conversation state for group not found
+        context.user_data.pop('conversation_state', None)
         
         if query:
             await query.edit_message_text(
@@ -256,38 +344,79 @@ async def join_group(update: Update, context: ContextTypes.DEFAULT_TYPE, target_
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
         else:
-            # For text input, return to main using utility function
-            group = find_group_for_user(data, user_id)
-            await ensure_main_message_exists(update, context, data, group)
+            # For text input, update main message with error
+            group_id = find_group_for_user(data, user_id)            
+            await update_main_message(context, message, InlineKeyboardMarkup(keyboard))
+        return
+    
+    # Check if user is already in this group
+    if current_group_id == target_group_id:
+        message = f"ℹ️ **Déjà dans le groupe**\n\nVous êtes déjà dans `{target_group_name}`."
+        keyboard = [[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]]
+        
+        # Clear conversation state for already in group
+        context.user_data.pop('conversation_state', None)
+        
+        if query:
+            await query.edit_message_text(
+                message,
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        else:
+            # For text input, update main message with error
+            group_id = find_group_for_user(data, user_id)
+            await update_main_message(context, message, InlineKeyboardMarkup(keyboard))
         return
     
     # Remove user from current group
-    if current_group and current_group in data:
-        if user_id in data[current_group].get("users", []):
-            data[current_group]["users"].remove(user_id)
+    if current_group_id:
+        group_users = data[current_group_id]["users"]
+        # Convert all user IDs to integers for comparison
+        int_users = []
+        for user in group_users:
+            try:
+                int_users.append(int(user))
+            except (ValueError, TypeError):
+                continue
+        
+        if user_id in int_users:
+            data[current_group_id]["users"].remove(str(user_id) if str(user_id) in group_users else user_id)
+            # Convert group_id to int for database function
+            update_group(int(current_group_id), data[current_group_id])
+            # Invalidate cache for this user
+            invalidate_user_cache(user_id)
     
     # Add user to target group
-    if "users" not in data[target_group]:
-        data[target_group]["users"] = []
-    data[target_group]["users"].append(user_id)
+    data[target_group_id]["users"].append(int(user_id))
+    # Convert group_id to int for database function
+    update_group(int(target_group_id), data[target_group_id])
     
-    await save_data(data, context)
+    # Invalidate cache for this user
+    invalidate_cache()  # Invalidate global cache
+    invalidate_user_cache(user_id)  # Invalidate user cache
+    _clear_context_cache(context)  # Clear context cache
     
+    # Recharge les données du groupe après la modification (avec cache invalidé)
+    data = load_data()
+    # Clear conversation state after successful join
+    context.user_data.pop('conversation_state', None)
     # Return to main menu
     from handlers.queries import get_main_message_content
-    group = find_group_for_user(data, user_id)
-    message_text, main_keyboard = get_main_message_content(data, group)
+    group_id = find_group_for_user(data, user_id)
+    message_text, main_keyboard = get_main_message_content(data, group_id)
+    
+    # Add confirmation message to avoid "Message is not modified" error
+    success_text = f"✅ **Groupe rejoint !**\n\nVous avez rejoint le groupe `{target_group_name}`\n\n{message_text}"
     
     if query:
         await query.edit_message_text(
-            text=message_text,
+            text=success_text,
             reply_markup=main_keyboard,
             parse_mode="Markdown"
         )
     else:
         # For text input, update main message using utility function
-        await ensure_main_message_exists(update, context, data, group)
-        await update_main_message(context, message_text, main_keyboard)
+        await update_main_message(context, success_text, main_keyboard)
 
 async def create_new_group(update: Update, context: ContextTypes.DEFAULT_TYPE, new_name: str):
     """Create a new group"""
@@ -305,27 +434,8 @@ async def create_new_group(update: Update, context: ContextTypes.DEFAULT_TYPE, n
         message = "❌ **Nom invalide**\n\nLe nom doit contenir 3-20 caractères et ne peut contenir que des lettres, chiffres, espaces et tirets."
         keyboard = [[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]]
         
-        if query:
-            await query.edit_message_text(
-                message,
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-        else:
-            # For text input, return to main using utility function
-            data = load_data()
-            user_id = update.effective_user.id
-            group = find_group_for_user(data, user_id)
-            await ensure_main_message_exists(update, context, data, group)
-        return
-    
-    data = load_data()
-    user_id = update.effective_user.id
-    current_group = find_group_for_user(data, user_id)
-    
-    # Check if name already exists
-    if new_name in data:
-        message = f"❌ **Nom déjà pris**\n\nLe groupe `{new_name}` existe déjà."
-        keyboard = [[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]]
+        # Clear conversation state for invalid name
+        context.user_data.pop('conversation_state', None)
         
         if query:
             await query.edit_message_text(
@@ -333,45 +443,89 @@ async def create_new_group(update: Update, context: ContextTypes.DEFAULT_TYPE, n
                 reply_markup=InlineKeyboardMarkup(keyboard)
             )
         else:
-            # For text input, return to main using utility function
-            group = find_group_for_user(data, user_id)
-            await ensure_main_message_exists(update, context, data, group)
+            # For text input, update main message with error
+            data = load_data()
+            user_id = update.effective_user.id
+            group_id = find_group_for_user(data, user_id)
+            await update_main_message(context, message, InlineKeyboardMarkup(keyboard))
         return
     
+    # Use cached data if available, otherwise load once
+    data = getattr(context, '_cached_data', None)
+    if data is None:
+        data = load_data()
+        context._cached_data = data
+    
+    user_id = update.effective_user.id
+    current_group_id = find_group_for_user(data, user_id)
+    
+    # Check if name already exists using loaded data instead of database call
+    for group_id, group_info in data.items():
+        if group_info['name'] == new_name:
+            message = f"❌ **Nom déjà pris**\n\nLe groupe `{new_name}` existe déjà."
+            keyboard = [[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]]
+            
+            # Clear conversation state for duplicate name
+            context.user_data.pop('conversation_state', None)
+            
+            if query:
+                await query.edit_message_text(
+                    message,
+                    reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+            else:
+                # For text input, update main message with error
+                group_id = find_group_for_user(data, user_id)
+                await update_main_message(context, message, InlineKeyboardMarkup(keyboard))
+            return
+    
     # Remove user from current group
-    if current_group and current_group in data:
-        if user_id in data[current_group].get("users", []):
-            data[current_group]["users"].remove(user_id)
+    if current_group_id and current_group_id in data:
+        group_users = data[current_group_id].get("users", [])
+        # Convert all user IDs to integers for comparison
+        int_users = []
+        for user in group_users:
+            try:
+                int_users.append(int(user))
+            except (ValueError, TypeError):
+                continue
+        
+        if user_id in int_users:
+            data[current_group_id]["users"].remove(str(user_id) if str(user_id) in group_users else user_id)
+            # Update the current group in database
+            update_group(int(current_group_id), data[current_group_id])
+            # Invalidate cache for this user
+            invalidate_user_cache(user_id)
     
     # Create new group
-    data[new_name] = {
-        "users": [user_id],
-        "entries": [],
-        "poop": [],
-        "time_difference": 0,
-        "bottles_to_show": 5,
-        "poops_to_show": 1
-    }
-    
-    await save_data(data, context)
-    
+    create_group(new_name, user_id)
+    # Invalidate cache for this user
+    invalidate_cache()  # Invalidate global cache
+    invalidate_user_cache(user_id)  # Invalidate user cache
+    _clear_context_cache(context)  # Clear context cache
+    # Recharge les données du groupe après la création (avec cache invalidé)
+    data = load_data()
+    # Clear conversation state after successful creation
+    context.user_data.pop('conversation_state', None)
     # Return to main menu
     from handlers.queries import get_main_message_content
-    group = find_group_for_user(data, user_id)
-    message_text, main_keyboard = get_main_message_content(data, group)
+    group_id = find_group_for_user(data, user_id)
+    message_text, main_keyboard = get_main_message_content(data, group_id)
+    
+    # Add confirmation message to avoid "Message is not modified" error
+    success_text = f"✅ **Groupe créé !**\n\nLe groupe `{new_name}` a été créé\n\n{message_text}"
     
     if query:
         await query.edit_message_text(
-            text=message_text,
+            text=success_text,
             reply_markup=main_keyboard,
             parse_mode="Markdown"
         )
     else:
         # For text input, update main message using utility function
-        await ensure_main_message_exists(update, context, data, group)
-        await update_main_message(context, message_text, main_keyboard)
+        await update_main_message(context, success_text, main_keyboard)
 
-async def leave_group(update: Update, context: ContextTypes.DEFAULT_TYPE, current_group: str):
+async def leave_group(update: Update, context: ContextTypes.DEFAULT_TYPE, current_group_id: str):
     """Leave current group and return to personal group"""
     # Check if this is a callback query or text input
     if hasattr(update, 'callback_query') and update.callback_query:
@@ -380,61 +534,76 @@ async def leave_group(update: Update, context: ContextTypes.DEFAULT_TYPE, curren
     else:
         query = None
     
-    data = load_data()
+    # Use cached data if available, otherwise load once
+    data = getattr(context, '_cached_data', None)
+    if data is None:
+        data = load_data()
+        context._cached_data = data
+    
     user_id = update.effective_user.id
     
     # Remove user from current group
-    if current_group in data:
-        if user_id in data[current_group].get("users", []):
-            data[current_group]["users"].remove(user_id)
+    if current_group_id:
+        group_users = data[current_group_id]["users"]
+        # Convert all user IDs to integers for comparison
+        int_users = []
+        for user in group_users:
+            try:
+                int_users.append(int(user))
+            except (ValueError, TypeError):
+                continue
+        
+        if user_id in int_users:
+            data[current_group_id]["users"].remove(str(user_id) if str(user_id) in group_users else user_id)
+            # Convert group_id to int for database function
+            update_group(int(current_group_id), data[current_group_id])
     
-    # Create or use personal group
-    personal_group = f"group_{user_id}"
-    if personal_group not in data:
-        data[personal_group] = {
-            "users": [user_id],
-            "entries": [],
-            "poop": [],
-            "time_difference": 0,
-            "bottles_to_show": 5,
-            "poops_to_show": 1
-        }
-    else:
-        data[personal_group]["users"] = [user_id]
+    # Create or use personal group (highly optimized)
+    personal_group_name = f"group_{user_id}"
+    personal_group_id = None
     
-    await save_data(data, context)
+    # Check if personal group already exists in current data
+    for group_id, group_info in data.items():
+        if group_info.get('name') == personal_group_name:
+            personal_group_id = group_id
+            # Ensure user is in the group
+            if user_id not in group_info.get('users', []):
+                group_info['users'].append(user_id)
+                update_group(int(group_id), group_info)
+            break
+    
+    # If personal group doesn't exist, create it directly in database
+    if personal_group_id is None:
+        create_group(personal_group_name, user_id)
+        # Get the created group ID efficiently
+        personal_group_id = get_user_group_id(user_id)
+    
+    # Invalidate cache once at the end
+    invalidate_cache()  # Invalidate global cache
+    _clear_context_cache(context)  # Clear context cache
+    
+    # Recharge les données du groupe après la modification (avec cache invalidé)
+    data = load_data()
+    # Clear conversation state after leaving group
+    context.user_data.pop('conversation_state', None)
     
     # Return to main menu
     from handlers.queries import get_main_message_content
-    group = find_group_for_user(data, user_id)
-    message_text, main_keyboard = get_main_message_content(data, group)
+    group_id = find_group_for_user(data, user_id)
+    message_text, main_keyboard = get_main_message_content(data, group_id)
+    
+    # Add confirmation message to avoid "Message is not modified" error
+    success_text = f"✅ **Groupe quitté !**\n\nVous êtes retourné à votre groupe personnel\n\n{message_text}"
     
     if query:
         await query.edit_message_text(
-            text=message_text,
+            text=success_text,
             reply_markup=main_keyboard,
             parse_mode="Markdown"
         )
     else:
-        # For text input, update main message
-        message_id = context.user_data.get('main_message_id')
-        chat_id = context.user_data.get('chat_id')
-        if message_id and chat_id:
-            await context.bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=message_id,
-                text=message_text,
-                reply_markup=main_keyboard,
-                parse_mode="Markdown"
-            )
-        else:
-            sent = await update.message.reply_text(
-                text=message_text,
-                reply_markup=main_keyboard,
-                parse_mode="Markdown"
-            )
-            context.user_data['main_message_id'] = sent.message_id
-            context.user_data['chat_id'] = sent.chat_id
+        # For text input, update main message using utility function
+        await update_main_message(context, success_text, main_keyboard)
 
 def is_valid_group_name(name: str) -> bool:
     """Validate group name format"""

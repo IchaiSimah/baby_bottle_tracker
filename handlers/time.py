@@ -10,7 +10,10 @@ async def time(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not group:
         adjusted_time = datetime.now(ZoneInfo("UTC"))
     else:
-        adjusted_time = datetime.now(ZoneInfo("UTC")) + timedelta(hours=data[group]["time_difference"])
+        td = data[group]["time_difference"]
+        if td is None:
+            td = 0
+        adjusted_time = datetime.now(ZoneInfo("UTC")) + timedelta(hours=td)
     await update.message.reply_text(f"L'heure du bot est : {adjusted_time.strftime('%H:%M')}")
 
 async def timeUpdate(update: Update, context: ContextTypes.DEFAULT_TYPE):

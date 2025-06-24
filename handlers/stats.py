@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from utils import load_data, find_group_for_user
+from utils import load_data, find_group_for_user, create_personal_group, save_data, load_user_stats, invalidate_user_cache
 import os
 
 async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -10,19 +10,26 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     user_id = update.effective_user.id
-    data = load_data()
-    group = find_group_for_user(data, user_id)
-    if not group:
-        await query.edit_message_text(
-            "❌ Vous n'êtes dans aucun groupe.",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🏠 Accueil", callback_data="refresh")
-            ]])
-        )
-        return
     
-    entries = data[group].get("entries", [])
-    poop = data[group].get("poop", [])
+    # Use optimized stats loading
+    stats_data = load_user_stats(user_id, 5)
+    if not stats_data:
+        # Fallback to old method if needed
+        data = load_data()
+        group_id = find_group_for_user(data, user_id)
+        if not group_id or group_id not in data:
+            error_msg = "❌ Erreur : impossible de trouver ou créer votre groupe personnel. Merci de réessayer plus tard."
+            if hasattr(update, 'message') and update.message:
+                await update.message.reply_text(error_msg)
+            elif hasattr(update, 'callback_query') and update.callback_query:
+                await update.callback_query.edit_message_text(error_msg)
+            return
+        
+        entries = data[group_id].get("entries", [])
+        poop = data[group_id].get("poop", [])
+    else:
+        entries = stats_data.get("entries", [])
+        poop = stats_data.get("poop", [])
     
     # Calculate stats for last 5 days
     today = datetime.now().date()
@@ -33,12 +40,12 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         date_str = date.strftime("%d-%m-%Y")
         
         # Count bottles for this date
-        day_bottles = [e for e in entries if date_str in e["time"]]
+        day_bottles = [e for e in entries if e["time"].strftime("%d-%m-%Y") == date_str]
         total_ml = sum(e["amount"] for e in day_bottles)
         bottle_count = len(day_bottles)
         
         # Count poops for this date
-        day_poops = [p for p in poop if date_str in p["time"]]
+        day_poops = [p for p in poop if p["time"].strftime("%d-%m-%Y") == date_str]
         poop_count = len(day_poops)
         
         stats[date_str] = {

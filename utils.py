@@ -6,10 +6,14 @@ from config import TEST_MODE
 from zoneinfo import ZoneInfo
 import threading
 import time as time_module
+from database import (
+    get_all_groups, create_group, set_user_message_info, get_user_message_info, clear_user_message_info, cleanup_old_data, update_group,
+    get_user_group_id, get_group_data_for_user, get_group_stats_for_user, get_group_by_id
+)
 
 load_dotenv()
 
-DATA_FILE = "biberons.json"
+DATA_FILE = "biberons.json" 
 MESSAGE_IDS_FILE = "message_ids.json"  # New file to store message IDs
 BACKUP_CHANNEL_ID = os.getenv("BACKUP_CHANNEL_ID")
 TELEGRAM_API_ID = os.getenv("TELEGRAM_API_ID")
@@ -20,6 +24,21 @@ SESSION_STRING = os.getenv("STRING_SESSION")
 last_cleanup_date = None
 cleanup_lock = threading.Lock()
 
+# Performance optimization: Add caching
+_cache = {}
+_cache_lock = threading.Lock()
+_cache_ttl = 300  # 5 minutes cache TTL
+_last_cache_cleanup = time_module.time()
+
+# Performance monitoring
+_performance_stats = {
+    'cache_hits': 0,
+    'cache_misses': 0,
+    'db_calls': 0,
+    'response_times': []
+}
+_performance_lock = threading.Lock()
+
 # Only check for backup variables if we're not in test mode
 if not TEST_MODE and not all([TELEGRAM_API_ID, TELEGRAM_API_HASH, BACKUP_CHANNEL_ID]):
     missing = []
@@ -28,113 +47,195 @@ if not TEST_MODE and not all([TELEGRAM_API_ID, TELEGRAM_API_HASH, BACKUP_CHANNEL
     if not BACKUP_CHANNEL_ID: missing.append("BACKUP_CHANNEL_ID")
     print(f"Warning: Missing backup environment variables: {', '.join(missing)}")
 
-def load_data():
-    try:
-        with open(DATA_FILE, 'r') as file:
-            data = json.load(file)
-            # Nettoyer les données pour s'assurer que time_difference est un nombre
-            return clean_data(data)
-    except FileNotFoundError:
-        return {}
-
-async def save_data(data, context):
-    # Run daily cleanup if needed
-    run_daily_cleanup()
+def _cleanup_cache():
+    """Clean up expired cache entries"""
+    global _last_cache_cleanup
+    current_time = time_module.time()
     
-    for group in data:
-        group_data = data[group]
-        entries = group_data.get("entries", [])
-        poop = group_data.get("poop", [])
-        
-        # Get current date
-        today = datetime.now().date()
-        
-        # Filter entries to keep only last 5 days
-        if isinstance(entries, list):
-            filtered_entries = []
-            for entry in entries:
-                try:
-                    # Extract date from entry time (format: "dd-mm-yyyy HH:MM")
-                    entry_date_str = entry["time"].split(" ")[0]
-                    entry_date = datetime.strptime(entry_date_str, "%d-%m-%Y").date()
-                    
-                    # Keep only entries from last 5 days
-                    if (today - entry_date).days <= 5:
-                        filtered_entries.append(entry)
-                except (ValueError, IndexError, KeyError):
-                    # If date parsing fails, keep the entry (fallback)
-                    filtered_entries.append(entry)
-            
-            group_data["entries"] = filtered_entries
-        
-        # Filter poop to keep only last 5 days
-        if isinstance(poop, list):
-            filtered_poop = []
-            for poop_entry in poop:
-                try:
-                    # Extract date from poop time (format: "dd-mm-yyyy HH:MM")
-                    poop_date_str = poop_entry["time"].split(" ")[0]
-                    poop_date = datetime.strptime(poop_date_str, "%d-%m-%Y").date()
-                    
-                    # Keep only poop from last 5 days
-                    if (today - poop_date).days <= 5:
-                        filtered_poop.append(poop_entry)
-                except (ValueError, IndexError, KeyError):
-                    # If date parsing fails, keep the entry (fallback)
-                    filtered_poop.append(poop_entry)
-            
-            group_data["poop"] = filtered_poop
-            
-    with open(DATA_FILE, 'w') as file:
-        json.dump(data, file, indent=2)
-    if TEST_MODE:
+    # Only cleanup every 60 seconds to avoid performance impact
+    if current_time - _last_cache_cleanup < 60:
         return
-    try:
-        with open(DATA_FILE, "rb") as f:
-            await context.bot.send_document(chat_id=BACKUP_CHANNEL_ID, document=f, filename="backup_biberons.json", caption="🧠 Nouvelle sauvegarde")
-    except Exception as e:
-        print(f"Erreur d'envoi de sauvegarde : {e}")
+    
+    with _cache_lock:
+        expired_keys = []
+        for key, (value, timestamp) in _cache.items():
+            if current_time - timestamp > _cache_ttl:
+                expired_keys.append(key)
+        
+        for key in expired_keys:
+            del _cache[key]
+        
+        _last_cache_cleanup = current_time
 
-def find_group_for_user(data, user_id):
-    for group_name, group_info in data.items():
-        if user_id in group_info.get("users", []):
-            return group_name
+def _get_cache(key):
+    """Get value from cache if not expired"""
+    _cleanup_cache()
+    with _cache_lock:
+        if key in _cache:
+            value, timestamp = _cache[key]
+            if time_module.time() - timestamp < _cache_ttl:
+                return value
+            else:
+                del _cache[key]
     return None
 
-def create_personal_group(data, user_id):
+def _set_cache(key, value):
+    """Set value in cache with current timestamp"""
+    with _cache_lock:
+        _cache[key] = (value, time_module.time())
+
+def load_data():
+    """Load data with caching to reduce database calls"""
+    start_time = time_module.time()
+    cache_key = "all_groups_data"
+    cached_data = _get_cache(cache_key)
+    
+    if cached_data is not None:
+        response_time = time_module.time() - start_time
+        _record_performance(True, response_time)
+        return cached_data
+    
+    _record_db_call()
+    data = get_all_groups()
+    _set_cache(cache_key, data)
+    
+    response_time = time_module.time() - start_time
+    _record_performance(False, response_time)
+    return data
+
+def load_user_data(user_id: int):
+    """Load data for a specific user - much more efficient than loading all data"""
+    start_time = time_module.time()
+    cache_key = f"user_data_{user_id}"
+    cached_data = _get_cache(cache_key)
+    
+    if cached_data is not None:
+        response_time = time_module.time() - start_time
+        _record_performance(True, response_time)
+        return cached_data
+    
+    _record_db_call()
+    data = get_group_data_for_user(user_id)
+    if data:
+        # Format as expected by existing code
+        formatted_data = {str(data['id']): data}
+        _set_cache(cache_key, formatted_data)
+        
+        response_time = time_module.time() - start_time
+        _record_performance(False, response_time)
+        return formatted_data
+    
+    response_time = time_module.time() - start_time
+    _record_performance(False, response_time)
+    return {}
+
+def load_user_stats(user_id: int, days: int = 5):
+    """Load statistics data for a specific user - optimized for stats"""
+    start_time = time_module.time()
+    cache_key = f"user_stats_{user_id}_{days}"
+    cached_data = _get_cache(cache_key)
+    
+    if cached_data is not None:
+        response_time = time_module.time() - start_time
+        _record_performance(True, response_time)
+        return cached_data
+    
+    _record_db_call()
+    data = get_group_stats_for_user(user_id, days)
+    _set_cache(cache_key, data)
+    
+    response_time = time_module.time() - start_time
+    _record_performance(False, response_time)
+    return data
+
+def invalidate_user_cache(user_id: int):
+    """Invalidate cache for a specific user"""
+    with _cache_lock:
+        keys_to_remove = []
+        for key in _cache.keys():
+            if f"user_data_{user_id}" in key or f"user_stats_{user_id}" in key or f"user_group_{user_id}" in key:
+                keys_to_remove.append(key)
+        
+        for key in keys_to_remove:
+            del _cache[key]
+
+def invalidate_cache():
+    """Invalidate all cached data - call this when data changes"""
+    with _cache_lock:
+        _cache.clear()
+
+async def save_data(data, context):
+    # This is now a no-op, as all changes are instantly reflected in Supabase
+    # But we need to invalidate cache when data changes
+    invalidate_cache()
+    pass
+
+def find_group_for_user(data, user_id):
+    """Return the group_id for the group containing the user_id, or None."""
+    # Use cache for user-group mapping
+    cache_key = f"user_group_{user_id}"
+    cached_group = _get_cache(cache_key)
+    
+    if cached_group is not None:
+        return cached_group
+    
+    # Try optimized database query first
+    group_id = get_user_group_id(user_id)
+    if group_id:
+        _set_cache(cache_key, str(group_id))
+        return str(group_id)
+    
+    # Fallback to searching in loaded data
+    for group_id, group_info in data.items():
+        if user_id in group_info.get("users", []):
+            _set_cache(cache_key, group_id)
+            return group_id
+    
+    _set_cache(cache_key, None)
+    return None
+
+def create_personal_group(data, user_id : int):
     group_name = f"group_{user_id}"
-    data[group_name] = {"users": [user_id], "entries": [], "time_difference": 0}
-    return group_name
+    
+    # First check if the group exists in the provided data
+    for group_id, group_info in data.items():
+        if group_info['name'] == group_name:
+            # Ajoute l'utilisateur s'il n'est pas déjà dedans
+            group_users = group_info.get('users', [])
+            # Convert all user IDs to integers for comparison
+            int_users = []
+            for user in group_users:
+                try:
+                    int_users.append(int(user))
+                except (ValueError, TypeError):
+                    continue
+            
+            if user_id not in int_users:
+                group_info['users'].append(int(user_id))
+                update_group(int(group_id), group_info)
+            return group_id
+    
+    # If not found in data, check database efficiently
+    group_id = get_user_group_id(user_id)
+    if group_id:
+        # Group exists, add user if not already in
+        group_data = get_group_by_id(group_id)
+        if group_data:
+            group_users = group_data.get('users', [])
+            if user_id not in group_users:
+                group_data['users'].append(user_id)
+                update_group(group_id, group_data)
+        return str(group_id)
+    
+    # Sinon, crée le groupe
+    create_group(group_name, user_id)
+    # Get the created group ID efficiently
+    return str(get_user_group_id(user_id))
 
 def load_backup_from_channel():
-    try:
-        # Import Telethon only when needed
-        from telethon.sync import TelegramClient
-        from telethon.sessions import StringSession
-        
-        print("Connecting to Telegram...")
-        with TelegramClient(StringSession(SESSION_STRING), int(TELEGRAM_API_ID), TELEGRAM_API_HASH) as client:
-            print("Fetching latest backup...")
-            messages = client.get_messages(int(BACKUP_CHANNEL_ID), limit=1)
-            if messages and messages[0].document:
-                print("Downloading backup file...")
-                client.download_media(messages[0], "backup_biberons.json")
+    # No longer needed with Supabase
+    pass
 
-                print("Loading backup data...")
-                with open("backup_biberons.json", "r") as f:
-                    data = json.load(f)
-
-                with open(DATA_FILE, 'w') as file_out:
-                    json.dump(data, file_out, indent=2)
-                    
-                print("✅ Backup loaded successfully")
-            else:
-                print("❌ Aucun document trouvé dans le canal.")
-
-    except Exception as e:
-        print(f"⚠️ Erreur pendant le chargement du backup : {e}")
-
-        
 def normalize_time(time_str: str) -> str:
     """Normalize time input to HH:MM format"""
     try:
@@ -191,79 +292,8 @@ def should_run_cleanup():
             return True
     return False
 
-def cleanup_old_data():
-    """Clean up data older than 5 days from existing data file"""
-    try:
-        data = load_data()
-        today = datetime.now().date()
-        cleaned_groups = 0
-        total_entries_removed = 0
-        total_poop_removed = 0
-        
-        for group in data:
-            group_data = data[group]
-            entries = group_data.get("entries", [])
-            poop = group_data.get("poop", [])
-            
-            original_entries_count = len(entries)
-            original_poop_count = len(poop)
-            
-            # Filter entries to keep only last 5 days
-            if isinstance(entries, list):
-                filtered_entries = []
-                for entry in entries:
-                    try:
-                        entry_date_str = entry["time"].split(" ")[0]
-                        entry_date = datetime.strptime(entry_date_str, "%d-%m-%Y").date()
-                        
-                        if (today - entry_date).days <= 5:
-                            filtered_entries.append(entry)
-                    except (ValueError, IndexError, KeyError):
-                        filtered_entries.append(entry)
-                
-                group_data["entries"] = filtered_entries
-                entries_removed = original_entries_count - len(filtered_entries)
-                total_entries_removed += entries_removed
-            
-            # Filter poop to keep only last 5 days
-            if isinstance(poop, list):
-                filtered_poop = []
-                for poop_entry in poop:
-                    try:
-                        poop_date_str = poop_entry["time"].split(" ")[0]
-                        poop_date = datetime.strptime(poop_date_str, "%d-%m-%Y").date()
-                        
-                        if (today - poop_date).days <= 5:
-                            filtered_poop.append(poop_entry)
-                    except (ValueError, IndexError, KeyError):
-                        filtered_poop.append(poop_entry)
-                
-                group_data["poop"] = filtered_poop
-                poop_removed = original_poop_count - len(filtered_poop)
-                total_poop_removed += poop_removed
-            
-            cleaned_groups += 1
-        
-        # Save cleaned data
-        with open(DATA_FILE, 'w') as file:
-            json.dump(data, file, indent=2)
-        
-        if total_entries_removed > 0 or total_poop_removed > 0:
-            print(f"🧹 Nettoyage quotidien terminé:")
-            print(f"   • Groupes traités: {cleaned_groups}")
-            print(f"   • Biberons supprimés: {total_entries_removed}")
-            print(f"   • Cacas supprimés: {total_poop_removed}")
-        
-        return True
-        
-    except Exception as e:
-        print(f"❌ Erreur lors du nettoyage: {e}")
-        return False
-
 def run_daily_cleanup():
-    """Run cleanup if it's a new day"""
-    if should_run_cleanup():
-        cleanup_old_data()
+    cleanup_old_data()
 
 def clean_data(data):
     """Nettoie les données pour s'assurer que time_difference est toujours un nombre"""
@@ -287,20 +317,26 @@ async def update_main_message(context, message_text, keyboard, parse_mode="Markd
     """Update the main message or create a new one if needed"""
     user_id = context.user_data.get('user_id')
     if not user_id:
+        print("No user ID found")
         return False
-    
+
     # For button interactions, use message ID from context
     message_id = context.user_data.get('main_message_id')
     chat_id = context.user_data.get('chat_id')
     
+    print(f"DEBUG: update_main_message - user_id: {user_id}, message_id: {message_id}, chat_id: {chat_id}")
+    
     # For text input or other cases, try stored message ID
     if not message_id or not chat_id:
+        print("No message ID or chat ID found")
         data = load_data()
         group = find_group_for_user(data, user_id)
         message_id, chat_id = get_group_message_info(data, group, user_id)
+        print(f"DEBUG: Retrieved from database - message_id: {message_id}, chat_id: {chat_id}")
     
     if message_id and chat_id:
         try:
+            print(f"DEBUG: Attempting to edit message {message_id} in chat {chat_id}")
             await context.bot.edit_message_text(
                 text=message_text,
                 chat_id=chat_id,
@@ -308,17 +344,22 @@ async def update_main_message(context, message_text, keyboard, parse_mode="Markd
                 reply_markup=keyboard,
                 parse_mode=parse_mode
             )
+            print("Message updated successfully")
             return True
         except Exception as e:
-            print(f"Failed to edit main message: {e}")
-            # Clear invalid message ID
-            data = load_data()
-            group = find_group_for_user(data, user_id)
-            clear_group_message_info(data, group, user_id)
-            await save_data(data, context)
-            context.user_data.pop('main_message_id', None)
-            context.user_data.pop('chat_id', None)
-    
+            error_msg = str(e)
+            if "Message is not modified" in error_msg:
+                print(f"Message is not modified {error_msg}")
+                return True
+            else:
+                print(f"Failed to edit main message: {e}")
+                # Clear invalid message ID
+                data = load_data()
+                group = find_group_for_user(data, user_id)
+                clear_group_message_info(data, group, user_id)
+                context.user_data.pop('main_message_id', None)
+                context.user_data.pop('chat_id', None)
+
     return False
 
 async def ensure_main_message_exists(update, context, data, group):
@@ -329,7 +370,9 @@ async def ensure_main_message_exists(update, context, data, group):
     message_text, keyboard = get_main_message_content(data, group)
     # Try to update existing message first
     if await update_main_message(context, message_text, keyboard):
+        print("Message updated successfully")
         return
+    print("No existing message or update failed, creating new one")
     # If no existing message or update failed, create new one
     if hasattr(update, 'callback_query') and update.callback_query:
         sent_message = await update.callback_query.edit_message_text(
@@ -346,29 +389,53 @@ async def ensure_main_message_exists(update, context, data, group):
     else:
         return
     set_group_message_info(data, group, user_id, sent_message.message_id, sent_message.chat_id)
-    await save_data(data, context)
     context.user_data['main_message_id'] = sent_message.message_id
     context.user_data['chat_id'] = sent_message.chat_id
 
-def get_group_message_info(data, group, user_id):
-    """Get message ID and chat ID for a specific user in a group"""
-    group_data = data.get(group, {})
-    user_messages = group_data.get('user_messages', {})
-    user_data = user_messages.get(str(user_id), {})
-    return user_data.get('main_message_id'), user_data.get('main_chat_id')
+def get_group_message_info(data, group_id, user_id):
+    """Get message ID and chat ID for a specific user in a group (by id)"""
+    return get_user_message_info(group_id, user_id)
 
-def set_group_message_info(data, group, user_id, message_id, chat_id):
-    """Set message ID and chat ID for a specific user in a group"""
-    if group in data:
-        if 'user_messages' not in data[group]:
-            data[group]['user_messages'] = {}
-        data[group]['user_messages'][str(user_id)] = {
-            'main_message_id': message_id,
-            'main_chat_id': chat_id
+def set_group_message_info(data, group_id, user_id, message_id, chat_id):
+    """Set message ID and chat ID for a specific user in a group (by id)"""
+    set_user_message_info(group_id, user_id, message_id, chat_id)
+
+def clear_group_message_info(data, group_id, user_id):
+    """Clear message ID and chat ID for a specific user in a group (by id)"""
+    clear_user_message_info(group_id, user_id)
+
+def get_performance_stats():
+    """Get current performance statistics"""
+    with _performance_lock:
+        total_requests = _performance_stats['cache_hits'] + _performance_stats['cache_misses']
+        cache_hit_rate = (_performance_stats['cache_hits'] / total_requests * 100) if total_requests > 0 else 0
+        avg_response_time = sum(_performance_stats['response_times']) / len(_performance_stats['response_times']) if _performance_stats['response_times'] else 0
+        
+        return {
+            'cache_hits': _performance_stats['cache_hits'],
+            'cache_misses': _performance_stats['cache_misses'],
+            'cache_hit_rate': f"{cache_hit_rate:.1f}%",
+            'db_calls': _performance_stats['db_calls'],
+            'avg_response_time': f"{avg_response_time:.3f}s",
+            'total_requests': total_requests
         }
 
-def clear_group_message_info(data, group, user_id):
-    """Clear message ID and chat ID for a specific user in a group"""
-    if group in data and 'user_messages' in data[group]:
-        data[group]['user_messages'].pop(str(user_id), None)
+def _record_performance(cache_hit: bool, response_time: float):
+    """Record performance metrics"""
+    with _performance_lock:
+        if cache_hit:
+            _performance_stats['cache_hits'] += 1
+        else:
+            _performance_stats['cache_misses'] += 1
+        
+        _performance_stats['response_times'].append(response_time)
+        
+        # Keep only last 100 response times to avoid memory bloat
+        if len(_performance_stats['response_times']) > 100:
+            _performance_stats['response_times'] = _performance_stats['response_times'][-100:]
+
+def _record_db_call():
+    """Record a database call"""
+    with _performance_lock:
+        _performance_stats['db_calls'] += 1
 

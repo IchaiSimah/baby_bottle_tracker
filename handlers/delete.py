@@ -1,7 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-
-from utils import load_data, save_data, find_group_for_user
+from utils import load_data, find_group_for_user, create_personal_group, save_data, load_user_data, invalidate_user_cache
+from database import remove_last_entry_from_group
 
 async def delete_bottle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show confirmation dialog for deleting the last bottle"""
@@ -9,35 +9,39 @@ async def delete_bottle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     user_id = update.effective_user.id
-    data = load_data()
-    group = find_group_for_user(data, user_id)
-    if not group:
-        await query.edit_message_text(
-            "❌ Vous n'êtes dans aucun groupe, rien à supprimer.",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🏠 Accueil", callback_data="refresh")
-            ]])
-        )
-        return False
     
-    if not data[group]["entries"]:
+    # Use optimized data loading
+    data = load_user_data(user_id)
+    if not data:
+        # Fallback to old method if needed
+        data = load_data()
+        group_id = find_group_for_user(data, user_id)
+        if not group_id or group_id not in data:
+            error_msg = "❌ Erreur : impossible de trouver ou créer votre groupe personnel. Merci de réessayer plus tard."
+            if hasattr(update, 'message') and update.message:
+                await update.message.reply_text(error_msg)
+            elif hasattr(update, 'callback_query') and update.callback_query:
+                await update.callback_query.edit_message_text(error_msg)
+            return False
+    
+    # Get the group ID from the loaded data
+    group_id = list(data.keys())[0]
+    group_data = data[group_id]
+    
+    if not group_data["entries"]:
         await query.edit_message_text(
             "❌ Aucun biberon à supprimer dans votre groupe.",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🏠 Accueil", callback_data="refresh")
-            ]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]])
         )
         return False
-    
-    # Get the last entry for confirmation
-    last_entry = data[group]["entries"][-1]
+    last_entry = group_data["entries"][0]
     
     # Show confirmation dialog
     message = f"🗑️ **Confirmer la suppression**\n\n"
     message += f"Voulez-vous vraiment supprimer ce biberon ?\n\n"
     message += f"**Dernier biberon :**\n"
-    message += f"• 📅 Date : {last_entry['time'].split(' ')[0]}\n"
-    message += f"• 🕐 Heure : {last_entry['time'].split(' ')[1]}\n"
+    message += f"• 📅 Date : {last_entry['time'].strftime('%d-%m-%Y')}\n"
+    message += f"• 🕐 Heure : {last_entry['time'].strftime('%H:%M')}\n"
     message += f"• 🍼 Quantité : {last_entry['amount']}ml\n"
     
     keyboard = [
@@ -62,29 +66,43 @@ async def confirm_delete_bottle(update: Update, context: ContextTypes.DEFAULT_TY
     await query.answer()
     
     user_id = update.effective_user.id
-    data = load_data()
-    group = find_group_for_user(data, user_id)
     
-    if not group or not data[group]["entries"]:
+    # Use optimized data loading
+    data = load_user_data(user_id)
+    if not data:
+        # Fallback to old method if needed
+        data = load_data()
+        group_id = find_group_for_user(data, user_id)
+        if not group_id or not data[group_id]["entries"]:
+            await query.edit_message_text(
+                "❌ Erreur : Aucun biberon à supprimer.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]])
+            )
+            return False
+        group_data = data[group_id]
+    else:
+        # Get the group ID from the loaded data
+        group_id = list(data.keys())[0]
+        group_data = data[group_id]
+    
+    if not group_data["entries"]:
         await query.edit_message_text(
             "❌ Erreur : Aucun biberon à supprimer.",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🏠 Accueil", callback_data="refresh")
-            ]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]])
         )
         return False
     
-    # Remove the last entry
-    removed_entry = data[group]["entries"].pop()
-    await save_data(data, context)
+    # Remove the last entry using Supabase
+    removed_entry = group_data["entries"][0]
+    remove_last_entry_from_group(int(group_id))
+    
+    # Invalidate cache for this user
+    invalidate_user_cache(user_id)
     
     # Show confirmation
     await query.edit_message_text(
-        f"✅ **Biberon supprimé !**\n\n"
-        f"Supprimé : {removed_entry['amount']}ml à {removed_entry['time'].split(' ')[1]}",
-        reply_markup=InlineKeyboardMarkup([[
-            InlineKeyboardButton("🏠 Accueil", callback_data="refresh")
-        ]])
+        f"✅ **Biberon supprimé !**\n\nSupprimé : {removed_entry['amount']}ml à {removed_entry['time'].strftime('%H:%M')}",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]])
     )
     
     return True
@@ -94,14 +112,14 @@ async def cancel_delete_bottle(update: Update, context: ContextTypes.DEFAULT_TYP
     query = update.callback_query
     await query.answer()
     
-    # Return to main message
-    from handlers.queries import get_main_message_content
-    from utils import load_data, find_group_for_user
+    # Clear conversation state when canceling
+    context.user_data.pop('conversation_state', None)
+    
+    # Return to main message using optimized function
+    from handlers.queries import get_main_message_content_for_user
     
     user_id = update.effective_user.id
-    data = load_data()
-    group = find_group_for_user(data, user_id)
-    message_text, keyboard = get_main_message_content(data, group)
+    message_text, keyboard = get_main_message_content_for_user(user_id)
     
     await query.edit_message_text(
         text=message_text,
