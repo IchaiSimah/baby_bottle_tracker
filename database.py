@@ -58,7 +58,8 @@ def get_user_group_id(user_id: int) -> Optional[int]:
     try:
         client = get_http_client()
         # Users are stored as strings in the database to handle large Telegram IDs
-        params = {"users": f"cs.[\"{user_id}\"]"}
+        # Use the correct Supabase syntax for array contains
+        params = {"users": f"cs.[\"{str(user_id)}\"]"}
         response = client.get(f"/{GROUPS_TABLE}", params=params)
         response.raise_for_status()
         
