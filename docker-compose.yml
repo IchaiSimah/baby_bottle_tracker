@@ -1,0 +1,87 @@
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: baby_bottle_tracker_bot
+    restart: unless-stopped
+    environment:
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - TEST_TOKEN=${TEST_TOKEN}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - ADMIN_ID=${ADMIN_ID}
+      - TEST_MODE=${TEST_MODE:-false}
+      - DATABASE_PATH=/app/data/baby_bottle_tracker.db
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    ports:
+      - "8080:8080"
+    depends_on:
+      - database
+    networks:
+      - bot_network
+
+  database:
+    image: alpine:latest
+    container_name: baby_bottle_tracker_db
+    restart: unless-stopped
+    command: >
+      sh -c "
+        apk add --no-cache sqlite &&
+        mkdir -p /data &&
+        sqlite3 /data/baby_bottle_tracker.db '
+          CREATE TABLE IF NOT EXISTS groups (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            users TEXT,
+            time_difference INTEGER DEFAULT 0,
+            last_bottle INTEGER DEFAULT 0,
+            bottles_to_show INTEGER DEFAULT 5,
+            poops_to_show INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+          CREATE TABLE IF NOT EXISTS entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            group_id INTEGER NOT NULL,
+            amount INTEGER NOT NULL,
+            time TIMESTAMP NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (group_id) REFERENCES groups (id)
+          );
+          CREATE TABLE IF NOT EXISTS poop (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            group_id INTEGER NOT NULL,
+            time TIMESTAMP NOT NULL,
+            info TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (group_id) REFERENCES groups (id)
+          );
+          CREATE TABLE IF NOT EXISTS user_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            group_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            main_message_id INTEGER,
+            main_chat_id INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (group_id) REFERENCES groups (id)
+          );
+          CREATE INDEX IF NOT EXISTS idx_entries_group_time ON entries(group_id, time);
+          CREATE INDEX IF NOT EXISTS idx_poop_group_time ON poop(group_id, time);
+          CREATE INDEX IF NOT EXISTS idx_user_messages_group_user ON user_messages(group_id, user_id);
+        ' &&
+        echo 'Database initialized successfully' &&
+        tail -f /dev/null
+      "
+    volumes:
+      - ./data:/data
+    networks:
+      - bot_network
+
+networks:
+  bot_network:
+    driver: bridge
+
+volumes:
+  data: 
