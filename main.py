@@ -321,6 +321,11 @@ async def button_handler(update, context):
         # Handle bottle count setting
         setting = action.replace("set_bottles_", "")
         return await handle_settings(update, context, f"set_bottles_{setting}")
+
+    elif action.startswith("set_last_bottle_"):
+        # Handle last bottle setting
+        setting = action.replace("set_last_bottle_", "")
+        return await handle_settings(update, context, f"set_last_bottle_{setting}")
     
     elif action.startswith("set_poops_"):
         # Handle poop count setting
@@ -487,12 +492,11 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     text = update.message.text.strip()
-    
     if state == 'bottle_time':
         # Handle bottle time text input
         from handlers.add import handle_bottle_time
         await handle_bottle_time(update, context, text)
-        
+
     elif state == 'bottle_amount':
         # Handle bottle amount text input
         from handlers.add import handle_bottle_amount
@@ -524,7 +528,16 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Handle group join text input
         from handlers.groups import join_group
         await join_group(update, context, text)
+
+    elif state == 'id_check_group_join':
+        # Handle group join id check
+        from handlers.groups import id_check_group_join
+        await id_check_group_join(update, context, text)
     
+    elif state == 'last_bottle':
+        from handlers.settings import handle_last_bottle_text_input
+        await handle_last_bottle_text_input(update, context, text)
+
     elif state == 'timezone_input':
         # Handle timezone input text
         from handlers.settings import handle_timezone_text_input
@@ -538,10 +551,6 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_shabbat_saturday_poop(update, context)
     elif state == 'shabbat_saturday_bottle':
         await handle_shabbat_saturday_bottle(update, context)
-    
-    elif state == 'last_bottle_input':
-        from handlers.settings import handle_last_bottle_text_input
-        await handle_last_bottle_text_input(update, context, text)
     
     # Don't clear conversation state here - let the individual handlers do it when conversation is complete
 

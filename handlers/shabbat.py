@@ -21,7 +21,7 @@ async def start_shabbat(update: Update, context: ContextTypes.DEFAULT_TYPE):
             data = load_user_data(user_id)
     if not data:
         await query.edit_message_text("❌ Oups ! Impossible de trouver ou créer votre groupe personnel pour le moment. Veuillez réessayer plus tard.")
-        return ConversationHandler.END
+        return
     group_id = list(data.keys())[0]
     group_data = data[group_id]
     td = group_data.get("time_difference", 0)
@@ -34,7 +34,6 @@ async def start_shabbat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = "🕯️ **Shabbat**\n\nCombien de cacas ont eu lieu vendredi soir (après le début du shabbat) ?"
     await query.edit_message_text(text=message, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
     context.user_data['conversation_state'] = 'shabbat_friday_poop'
-    return ASK_SHABBAT_FRIDAY_POOP
 
 async def handle_shabbat_friday_poop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query if hasattr(update, 'callback_query') and update.callback_query else None
@@ -51,7 +50,7 @@ async def handle_shabbat_friday_poop(update: Update, context: ContextTypes.DEFAU
             await query.edit_message_text(text=message, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
         else:
             await update_main_message(context, message, InlineKeyboardMarkup(keyboard))
-        return ASK_SHABBAT_FRIDAY_POOP
+        return
     context.user_data['shabbat_friday_poop'] = int(value)
     # Demander la quantité de lait vendredi soir
     keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="cancel")]]
@@ -60,10 +59,11 @@ async def handle_shabbat_friday_poop(update: Update, context: ContextTypes.DEFAU
         await query.edit_message_text(text=message, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
     else:
         await update_main_message(context, message, InlineKeyboardMarkup(keyboard))
+    # Passer à l'état suivant pour router les entrées de texte
     context.user_data['conversation_state'] = 'shabbat_friday_bottle'
-    return ASK_SHABBAT_FRIDAY_BOTTLE
 
 async def handle_shabbat_friday_bottle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gère la saisie de la quantité de lait vendredi soir"""
     query = update.callback_query if hasattr(update, 'callback_query') and update.callback_query else None
     if query:
         await query.answer()
@@ -78,7 +78,7 @@ async def handle_shabbat_friday_bottle(update: Update, context: ContextTypes.DEF
             await query.edit_message_text(text=message, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
         else:
             await update_main_message(context, message, InlineKeyboardMarkup(keyboard))
-        return ASK_SHABBAT_FRIDAY_BOTTLE
+        return
     context.user_data['shabbat_friday_bottle'] = int(value)
     # Demander le nombre de cacas samedi midi
     keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="cancel")]]
@@ -88,7 +88,6 @@ async def handle_shabbat_friday_bottle(update: Update, context: ContextTypes.DEF
     else:
         await update_main_message(context, message, InlineKeyboardMarkup(keyboard))
     context.user_data['conversation_state'] = 'shabbat_saturday_poop'
-    return ASK_SHABBAT_SATURDAY_POOP
 
 async def handle_shabbat_saturday_poop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query if hasattr(update, 'callback_query') and update.callback_query else None
@@ -105,7 +104,7 @@ async def handle_shabbat_saturday_poop(update: Update, context: ContextTypes.DEF
             await query.edit_message_text(text=message, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
         else:
             await update_main_message(context, message, InlineKeyboardMarkup(keyboard))
-        return ASK_SHABBAT_SATURDAY_POOP
+        return
     context.user_data['shabbat_saturday_poop'] = int(value)
     # Demander la quantité de lait samedi midi
     keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="cancel")]]
@@ -115,7 +114,6 @@ async def handle_shabbat_saturday_poop(update: Update, context: ContextTypes.DEF
     else:
         await update_main_message(context, message, InlineKeyboardMarkup(keyboard))
     context.user_data['conversation_state'] = 'shabbat_saturday_bottle'
-    return ASK_SHABBAT_SATURDAY_BOTTLE
 
 async def handle_shabbat_saturday_bottle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query if hasattr(update, 'callback_query') and update.callback_query else None
@@ -132,7 +130,7 @@ async def handle_shabbat_saturday_bottle(update: Update, context: ContextTypes.D
             await query.edit_message_text(text=message, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
         else:
             await update_main_message(context, message, InlineKeyboardMarkup(keyboard))
-        return ASK_SHABBAT_SATURDAY_BOTTLE
+        return
     context.user_data['shabbat_saturday_bottle'] = int(value)
     # Ajout des entrées dans la base de données
     user_id = update.effective_user.id
@@ -176,12 +174,11 @@ async def handle_shabbat_saturday_bottle(update: Update, context: ContextTypes.D
         await query.edit_message_text(text=message, reply_markup=keyboard, parse_mode="Markdown")
     else:
         await update_main_message(context, message, keyboard)
-    # Nettoyer l'état
+    # Nettoyer l'état de conversation
     context.user_data.pop('conversation_state', None)
     context.user_data.pop('shabbat_group_id', None)
     context.user_data.pop('shabbat_time_difference', None)
     context.user_data.pop('shabbat_friday_poop', None)
     context.user_data.pop('shabbat_friday_bottle', None)
     context.user_data.pop('shabbat_saturday_poop', None)
-    context.user_data.pop('shabbat_saturday_bottle', None)
-    return ConversationHandler.END 
+    context.user_data.pop('shabbat_saturday_bottle', None) 

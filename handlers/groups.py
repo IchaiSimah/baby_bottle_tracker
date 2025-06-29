@@ -25,14 +25,15 @@ async def show_groups_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Get current group info
     group_info = data[group_id]
     group_name = group_info.get('name', str(group_id))
+    group_id_str = str(group_id)
     member_count = len(group_info.get("users", []))
     
     message = f"👥 **Gestion des Groupes** 🏘️\n\n"
     message += f"**🏠 Groupe actuel :** `{group_name}`\n"
+    message += f"**🆔 id du groupe :** ||{group_id_str}||\n"
     message += f"**👤 Membres :** {member_count}\n"
     
     # Convert group_id to string for startswith check
-    group_id_str = str(group_id)
     if group_id_str.startswith("group_"):
         message += "\n*Vous êtes dans un groupe personnel* 👤\n"
     else:
@@ -56,7 +57,7 @@ async def show_groups_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text(
         text=message,
         reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode="Markdown"
+        parse_mode="MarkdownV2"
     )
 
 async def handle_group_actions(update: Update, context: ContextTypes.DEFAULT_TYPE, action: str = None):
@@ -349,7 +350,34 @@ async def join_group(update: Update, context: ContextTypes.DEFAULT_TYPE, target_
         return
     
     # Remove user from current group
+
     if current_group_id:
+        message = f"ℹ️ **entrez l'id du groupe `{target_group_name}` pour rejoindre le groupe.**"
+        keyboard = [
+            [InlineKeyboardButton("🏠 Accueil", callback_data="refresh")],
+            [InlineKeyboardButton("⬅️ Retour", callback_data="settings")]
+        ]
+        await update_main_message(context, message, InlineKeyboardMarkup(keyboard))
+        context.user_data['conversation_state'] = 'id_check_group_join'
+        context.user_data['target_group_id'] = target_group_id
+        return
+    
+async def id_check_group_join(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+    await delete_user_message(context, update.effective_chat.id, update.message.message_id)
+    data = load_data()
+    user_id = update.effective_user.id
+    target_group_id = context.user_data['target_group_id']
+    current_group_id = find_group_for_user(data, user_id)
+    if text != str(target_group_id):
+        message = f"ℹ️ **l'id du groupe est incorrect, veuillez réessayer.\n\n**"
+        message += f"**vous pouvez retrouver l'id du groupe dans les parametres des groupes.**"
+        keyboard = [
+            [InlineKeyboardButton("🏠 Accueil", callback_data="refresh")],
+            [InlineKeyboardButton("⬅️ Retour", callback_data="settings")]
+        ]
+        await update_main_message(context, message, InlineKeyboardMarkup(keyboard))
+        return 
+    else:
         group_users = data[current_group_id]["users"]
         # Convert all user IDs to integers for comparison
         int_users = []
@@ -375,19 +403,10 @@ async def join_group(update: Update, context: ContextTypes.DEFAULT_TYPE, target_
     from handlers.queries import get_main_message_content
     group_id = find_group_for_user(data, user_id)
     message_text, main_keyboard = get_main_message_content(data, group_id)
-    
+    target_group_name = data[target_group_id]['name']
     # Add confirmation message to avoid "Message is not modified" error
     success_text = f"✅ **Groupe rejoint !**\n\nVous avez rejoint le groupe `{target_group_name}`\n\n{message_text}"
-    
-    if query:
-        await query.edit_message_text(
-            text=success_text,
-            reply_markup=main_keyboard,
-            parse_mode="Markdown"
-        )
-    else:
-        # For text input, update main message using utility function
-        await update_main_message(context, success_text, main_keyboard)
+    await update_main_message(context, success_text, main_keyboard)
 
 async def create_new_group(update: Update, context: ContextTypes.DEFAULT_TYPE, new_name: str):
     """Create a new group"""
