@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from zoneinfo import ZoneInfo
-from utils import load_data, find_group_for_user, create_personal_group, save_data, load_user_stats, invalidate_user_cache
+from utils import load_data, find_group_for_user, create_personal_group, save_data, load_user_stats
 import os
 import requests
 
@@ -99,8 +99,7 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text=message,
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown"
-    )
-    
+    )    
     # Generate AI summary in background
     ai_summary = await generate_ai_summary(stats)
     

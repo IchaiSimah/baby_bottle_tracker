@@ -1,6 +1,6 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from utils import load_data, save_data, find_group_for_user, create_personal_group, normalize_time, ensure_main_message_exists, update_main_message, set_group_message_info, invalidate_user_cache
+from utils import load_data, save_data, find_group_for_user, create_personal_group, normalize_time, ensure_main_message_exists, update_main_message, set_group_message_info
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from config import TEST_MODE
@@ -150,8 +150,7 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
         data[group_id]["bottles_to_show"] = count
         # Convert group_id to int for database function
         update_group(int(group_id), data[group_id])
-        # Invalidate cache for this user
-        invalidate_user_cache(user_id)
+
         # Recharge les données du groupe après la modification
         data = load_data()
         await show_settings(update, context)
@@ -161,8 +160,6 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
         data[group_id]["poops_to_show"] = count
         # Convert group_id to int for database function
         update_group(int(group_id), data[group_id])
-        # Invalidate cache for this user
-        invalidate_user_cache(user_id)
         # Recharge les données du groupe après la modification
         data = load_data()
         await show_settings(update, context)
@@ -226,8 +223,6 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
             data[group_id]["time_difference"] = diff_hour
             # Convert group_id to int for database function
             update_group(int(group_id), data[group_id])
-            # Invalidate cache for this user
-            invalidate_user_cache(user_id)
             # Recharge les données du groupe après la modification
             data = load_data()
             adjusted_time = datetime.now(ZoneInfo("UTC")) + timedelta(hours=diff_hour)
@@ -329,7 +324,6 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
         value = int(setting.replace("set_last_bottle_", ""))
         data[group_id]["last_bottle"] = value
         update_group(int(group_id), data[group_id])
-        invalidate_user_cache(user_id)
         data = load_data()
         message = f"✅ Taille du biberon mis à jour : {value}ml"
         keyboard = [[InlineKeyboardButton("🏠 Retour aux paramètres", callback_data="settings")]]
@@ -372,8 +366,6 @@ async def handle_timezone_text_input(update: Update, context: ContextTypes.DEFAU
         data[group_id]["time_difference"] = diff_hour
         # Convert group_id to int for database function
         update_group(int(group_id), data[group_id])
-        # Invalidate cache for this user
-        invalidate_user_cache(user_id)
         # Recharge les données du groupe après la modification
         data = load_data()
         # Clear conversation state
@@ -409,7 +401,6 @@ async def handle_last_bottle_text_input(update: Update, context: ContextTypes.DE
             raise ValueError
         data[group_id]["last_bottle"] = value
         update_group(int(group_id), data[group_id])
-        invalidate_user_cache(user_id)
         data = load_data()
         context.user_data.pop('conversation_state', None)
         message = f"✅ Dernier biberon mis à jour : {value}ml"

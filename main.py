@@ -7,7 +7,7 @@ from handlers.poop import add_poop, handle_poop_time, handle_poop_info, cancel_p
 from handlers.delete import delete_bottle, confirm_delete_bottle, cancel_delete_bottle
 from handlers.stats import show_stats
 from handlers.settings import show_settings, handle_settings, handle_timezone_text_input
-from handlers.groups import show_groups_menu, handle_group_actions, create_new_group, join_group
+from handlers.groups import show_groups_menu, handle_group_actions, create_new_group, join_group, rename_group
 from handlers.queries import get_main_message_content, get_main_message_content_for_user
 from handlers.pdf import show_pdf_menu, handle_pdf_callback, generate_pdf_report
 from utils import load_data, save_data, find_group_for_user, create_personal_group, get_group_message_info, set_group_message_info, clear_group_message_info, load_user_data, safe_edit_message_text_with_query
@@ -224,7 +224,7 @@ async def button_handler(update, context):
     
     action = query.data
     
-    if action == "refresh":
+    if action == "refresh" or action == "cancel":
         # Refresh main message using optimized function
         # Clear conversation state when returning to main
         context.user_data.pop('conversation_state', None)
@@ -249,7 +249,15 @@ async def button_handler(update, context):
     elif action == "remove_bottle":
         # Show confirmation dialog for bottle deletion
         return await delete_bottle(update, context)
-    
+
+    elif action == "confirm_delete":
+        # Confirm bottle deletion
+        return await confirm_delete_bottle(update, context)
+
+    elif action == "cancel_delete":
+        # Cancel bottle deletion
+        return await cancel_delete_bottle(update, context)
+
     elif action == "add_poop":
         # Start add poop flow
         context.user_data['action'] = 'add_poop'
@@ -267,7 +275,7 @@ async def button_handler(update, context):
         # Show groups menu
         return await show_groups_menu(update, context)
     
-    elif action == "pdf":
+    elif action == "pdf_menu":
         # Show PDF menu
         return await show_pdf_menu(update, context)
     
@@ -278,15 +286,56 @@ async def button_handler(update, context):
     elif action.startswith("group_"):
         # Handle group-related actions
         return await handle_group_actions(update, context)
+
+    elif action.startswith("bottle_time_"):
+        # Handle bottle time selection
+        time_str = action.replace("bottle_time_", "")
+        return await handle_bottle_time(update, context, time_str)
+    
+    elif action.startswith("bottle_amount_"):
+        # Handle bottle amount selection
+        amount_str = action.replace("bottle_amount_", "")
+        return await handle_bottle_amount(update, context, amount_str)
+    
+    elif action.startswith("poop_time_"):
+        # Handle poop time selection
+        time_str = action.replace("poop_time_", "")
+        return await handle_poop_time(update, context, time_str)
+    
+    elif action.startswith("poop_info_"):
+        # Handle poop info selection
+        info = action.replace("poop_info_", "")
+        if info == "none":
+            info = None
+        return await handle_poop_info(update, context)
     
     elif action.startswith("pdf_"):
         # Handle PDF-related actions
         return await handle_pdf_callback(update, context)
     
-    elif action.startswith("settings_"):
+    elif action.startswith("setting_"):
         # Handle settings-related actions
         return await handle_settings(update, context)
     
+    elif action.startswith("set_bottles_"):
+        # Handle bottle count setting
+        setting = action.replace("set_bottles_", "")
+        return await handle_settings(update, context, f"set_bottles_{setting}")
+    
+    elif action.startswith("set_poops_"):
+        # Handle poop count setting
+        setting = action.replace("set_poops_", "")
+        return await handle_settings(update, context, f"set_poops_{setting}")
+
+    elif action.startswith("set_time_"):
+        # Handle time setting
+        setting = action.replace("set_time_", "")
+        return await handle_settings(update, context, f"set_time_{setting}")
+
+    elif action == "manual_time_input":
+        # Handle manual time input
+        return await handle_settings(update, context, "manual_time_input")
+
     elif action.startswith("shabbat_"):
         # Handle Shabbat-related actions
         if action == "shabbat_friday_poop":
@@ -395,13 +444,113 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.callback_query.edit_message_text(error_msg)
         return
     
-    # Handle timezone text input
-    if context.user_data.get('conversation_state') == 'waiting_timezone':
-        await handle_timezone_text_input(update, context, update.message.text)
+    # Check if user is in a conversation state
+    if 'conversation_state' not in context.user_data:
+        # User is not in a conversation - show helpful message
+        help_message = "💡 **aucune saisie n'est requise**\n\n" \
+                      "• ⚙️ utilisez les boutons pour interagir avec le bot !"
+        
+        try:
+            # Send a temporary help message that will be deleted after a few seconds
+            if update.message:
+                sent_message = await update.message.reply_text(
+                    help_message,
+                    parse_mode="Markdown"
+                )
+                
+                # Delete the help message after 3 seconds
+                import asyncio
+                await asyncio.sleep(3)
+                try:
+                    await context.bot.delete_message(chat_id=sent_message.chat_id, message_id=sent_message.message_id)
+                except Exception as e:
+                    print(f"Failed to delete help message: {e}")
+        except Exception as e:
+            print(f"Error sending help message: {e}")
+        
+        # Delete the user's message for clean chat
+        if update.message and update.effective_chat:
+            try:
+                await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=update.message.message_id)
+            except Exception as e:
+                print(f"Failed to delete user message: {e}")
         return
     
-    # If no specific conversation state, ignore the text input
-    print(f"Received text input but no conversation state: {update.message.text}")
+    # For text input, we need to get the stored message ID from the group data
+    message_id, chat_id = get_group_message_info(data, group_id, user_id)
+    if message_id and chat_id:
+        context.user_data['main_message_id'] = message_id
+        context.user_data['chat_id'] = chat_id
+    
+    state = context.user_data['conversation_state']
+    if not update.message or not update.message.text:
+        return
+    
+    text = update.message.text.strip()
+    
+    if state == 'bottle_time':
+        # Handle bottle time text input
+        from handlers.add import handle_bottle_time
+        await handle_bottle_time(update, context, text)
+        
+    elif state == 'bottle_amount':
+        # Handle bottle amount text input
+        from handlers.add import handle_bottle_amount
+        await handle_bottle_amount(update, context, text)
+        
+    elif state == 'poop_time':
+        # Handle poop time text input
+        from handlers.poop import handle_poop_time
+        await handle_poop_time(update, context, text)
+    
+    elif state == 'poop_info':
+        # Handle poop info text input
+        from handlers.poop import handle_poop_info
+        await handle_poop_info(update, context)
+    
+    elif state == 'group_rename':
+        # Handle group rename text input
+        from handlers.groups import rename_group
+        current_group = find_group_for_user(data, user_id)
+        if current_group:
+            await rename_group(update, context, current_group, text)
+    
+    elif state == 'group_create':
+        # Handle group create text input
+        from handlers.groups import create_new_group
+        await create_new_group(update, context, text)
+    
+    elif state == 'group_join':
+        # Handle group join text input
+        from handlers.groups import join_group
+        await join_group(update, context, text)
+    
+    elif state == 'timezone_input':
+        # Handle timezone input text
+        from handlers.settings import handle_timezone_text_input
+        await handle_timezone_text_input(update, context, text)
+    
+    elif state == 'shabbat_friday_poop':
+        await handle_shabbat_friday_poop(update, context)
+    elif state == 'shabbat_friday_bottle':
+        await handle_shabbat_friday_bottle(update, context)
+    elif state == 'shabbat_saturday_poop':
+        await handle_shabbat_saturday_poop(update, context)
+    elif state == 'shabbat_saturday_bottle':
+        await handle_shabbat_saturday_bottle(update, context)
+    
+    elif state == 'last_bottle_input':
+        from handlers.settings import handle_last_bottle_text_input
+        await handle_last_bottle_text_input(update, context, text)
+    
+    # Don't clear conversation state here - let the individual handlers do it when conversation is complete
+
+    # Delete the user's text message for a clean chat
+    if update.message and update.effective_chat:
+        try:
+            await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=update.message.message_id)
+        except Exception as e:
+            print(f"Failed to delete user message: {e}")
 
 def main():
     """Main function to start the bot"""
@@ -435,9 +584,6 @@ def main():
     
     # Add error handler
     application.add_error_handler(error_handler)
-    
-    # Set bot commands
-    application.job_queue.run_once(set_commands, 0)
     
     print("🤖 Bot started successfully!")
     print("Press Ctrl+C to stop the bot")

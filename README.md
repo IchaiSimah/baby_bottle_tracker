@@ -196,22 +196,11 @@ docker exec -it baby_bottle_tracker_db sqlite3 /data/baby_bottle_tracker.db
 SELECT * FROM entries ORDER BY time DESC LIMIT 10;
 ```
 
-## 📊 Performance Features
-
-### Caching System
-- Intelligent caching reduces database calls
-- 5-minute cache TTL for optimal performance
-- Automatic cache invalidation on data changes
-
 ### Database Optimization
 - Indexed queries for fast data retrieval
 - Connection pooling for concurrent access
 - Automatic cleanup of old data
 
-### Monitoring
-- Built-in performance tracking
-- Response time monitoring
-- Cache hit/miss statistics
 
 ## 🔒 Security & Privacy
 

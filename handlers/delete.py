@@ -1,6 +1,6 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from utils import load_data, find_group_for_user, create_personal_group, save_data, load_user_data, invalidate_user_cache, update_all_group_messages
+from utils import load_data, find_group_for_user, create_personal_group, save_data, load_user_data, update_all_group_messages
 from database import remove_last_entry_from_group
 
 async def delete_bottle(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -95,8 +95,7 @@ async def confirm_delete_bottle(update: Update, context: ContextTypes.DEFAULT_TY
     removed_entry = group_data["entries"][0]
     remove_last_entry_from_group(int(group_id))
     
-    # Invalidate cache for this user
-    invalidate_user_cache(user_id)
+
     
     # Reload data to get updated information
     data = load_user_data(user_id)
@@ -140,6 +139,5 @@ async def cancel_delete_bottle(update: Update, context: ContextTypes.DEFAULT_TYP
         text=message_text,
         reply_markup=keyboard,
         parse_mode="Markdown"
-    )
-    
+    )    
     return True

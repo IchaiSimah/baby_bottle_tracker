@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 from zoneinfo import ZoneInfo
-from utils import load_data, save_data, find_group_for_user, create_personal_group, is_valid_time, normalize_time, getValidDate, delete_user_message, update_main_message, ensure_main_message_exists, set_group_message_info, load_user_data, invalidate_user_cache, update_all_group_messages
+from utils import load_data, save_data, find_group_for_user, create_personal_group, is_valid_time, normalize_time, getValidDate, delete_user_message, update_main_message, ensure_main_message_exists, set_group_message_info, load_user_data, update_all_group_messages
 from config import TEST_MODE
 from database import add_entry_to_group
 
@@ -288,8 +288,7 @@ async def handle_bottle_amount(update: Update, context: ContextTypes.DEFAULT_TYP
         # Convert group_id to int for database function
         add_entry_to_group(int(group_id), amount, dt)
         
-        # Invalidate cache for this user
-        invalidate_user_cache(user_id)
+
         
         # Reload data to get the updated information including the new bottle
         data = load_user_data(user_id)

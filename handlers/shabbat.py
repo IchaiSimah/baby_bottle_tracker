@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 from zoneinfo import ZoneInfo
-from utils import load_data, save_data, find_group_for_user, create_personal_group, update_main_message, set_group_message_info, load_user_data, invalidate_user_cache, update_all_group_messages
+from utils import load_data, save_data, find_group_for_user, create_personal_group, update_main_message, set_group_message_info, load_user_data,  update_all_group_messages
 from database import add_entry_to_group, add_poop_to_group
 
 ASK_SHABBAT_FRIDAY_POOP, ASK_SHABBAT_FRIDAY_BOTTLE, ASK_SHABBAT_SATURDAY_POOP, ASK_SHABBAT_SATURDAY_BOTTLE = range(4)
@@ -159,8 +159,7 @@ async def handle_shabbat_saturday_bottle(update: Update, context: ContextTypes.D
     # Ajouter le biberon samedi midi
     if context.user_data['shabbat_saturday_bottle'] > 0:
         add_entry_to_group(int(group_id), context.user_data['shabbat_saturday_bottle'], saturday_12h)
-    # Invalider le cache
-    invalidate_user_cache(user_id)
+
     # Message de succès et retour à l'accueil
     from handlers.queries import get_main_message_content
     data = load_user_data(user_id)

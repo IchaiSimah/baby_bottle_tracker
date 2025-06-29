@@ -428,7 +428,7 @@ def create_group(group_name: str, user_id: int) -> Optional[int]:
         users_json = json.dumps([user_id])
         cursor.execute(f"""
             INSERT INTO {GROUPS_TABLE} (name, users, time_difference, last_bottle, bottles_to_show, poops_to_show)
-            VALUES (?, ?, 0, 0, 5, 1)
+            VALUES (?, ?, 3, 0, 5, 1)
         """, (group_name, users_json))
         
         # Get the created group ID
