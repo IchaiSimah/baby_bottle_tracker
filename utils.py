@@ -98,10 +98,6 @@ def create_personal_group(data, user_id : int):
         print(f"Failed to create personal group {group_name}")
         return None
 
-def load_backup_from_channel():
-    # No longer needed with SQLite
-    pass
-
 def normalize_time(time_str: str) -> str:
     """Normalize time input to HH:MM format"""
     try:
@@ -136,13 +132,6 @@ def is_valid_time(time_str: str) -> bool:
     except (ValueError, IndexError):
         return False
 
-def getValidDate(time: str, difference: int) -> str:
-    """Get a valid date string based on time and timezone difference"""
-    from datetime import datetime, timedelta
-    current_time = datetime.now(ZoneInfo('UTC'))
-    adjusted_time = current_time + timedelta(hours=difference)
-    return adjusted_time.strftime('%Y-%m-%d')
-
 def should_run_cleanup():
     """Check if daily cleanup should run"""
     global last_cleanup_date
@@ -159,10 +148,6 @@ def run_daily_cleanup():
             global last_cleanup_date
             last_cleanup_date = datetime.now().date()
             cleanup_old_data()
-
-def clean_data(data):
-    """Clean data - no longer needed with SQLite"""
-    pass
 
 async def delete_user_message(context, chat_id, message_id):
     """Delete a user message"""
@@ -287,49 +272,6 @@ def clear_group_message_info(data, group_id, user_id):
     """Clear message ID and chat ID for a specific user in a group (by id)"""
     clear_user_message_info(group_id, user_id)
 
-async def safe_edit_message_text(update, context, text, reply_markup=None, parse_mode="Markdown"):
-    """Safely edit message text, handling 'Message is not modified' error"""
-    try:
-        if hasattr(update, 'callback_query') and update.callback_query:
-            await update.callback_query.edit_message_text(
-                text=text,
-                reply_markup=reply_markup,
-                parse_mode=parse_mode
-            )
-        else:
-            # Fallback for other cases
-            await context.bot.edit_message_text(
-                text=text,
-                chat_id=update.effective_chat.id,
-                message_id=update.effective_message.message_id,
-                reply_markup=reply_markup,
-                parse_mode=parse_mode
-            )
-    except Exception as e:
-        if "Message is not modified" in str(e):
-            # Message content is identical, no need to modify
-            print("ℹ️ Message content unchanged, skipping edit")
-            return
-        else:
-            # Re-raise other errors
-            raise e
-
-async def safe_edit_message_text_with_query(query, text, reply_markup=None, parse_mode="Markdown"):
-    """Safely edit message text using query, handling 'Message is not modified' error"""
-    try:
-        await query.edit_message_text(
-            text=text,
-            reply_markup=reply_markup,
-            parse_mode=parse_mode
-        )
-    except Exception as e:
-        if "Message is not modified" in str(e):
-            # Message content is identical, no need to modify
-            print("ℹ️ Message content unchanged, skipping edit")
-            return
-        else:
-            # Re-raise other errors
-            raise e
 
 async def update_all_group_messages(context, group_id: int, message_text: str, keyboard, caller_user_id: int = None, parse_mode="Markdown"):
     """Update all messages for all users in a group after data changes"""

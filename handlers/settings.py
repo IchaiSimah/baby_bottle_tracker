@@ -1,6 +1,6 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from utils import load_data, save_data, find_group_for_user, create_personal_group, normalize_time, ensure_main_message_exists, update_main_message, set_group_message_info
+from utils import load_data, save_data, find_group_for_user, create_personal_group, normalize_time, ensure_main_message_exists, update_main_message
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from config import TEST_MODE

@@ -1,7 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from utils import load_data, save_data, find_group_for_user, create_personal_group, delete_user_message, update_main_message, ensure_main_message_exists
-from database import update_group, create_group, update_group_name, get_all_groups, get_user_group_id
+from utils import load_data, save_data, find_group_for_user, create_personal_group, delete_user_message, update_main_message
+from database import update_group, create_group, update_group_name,  get_user_group_id
 import re
 
 async def show_groups_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):

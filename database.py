@@ -398,21 +398,6 @@ def get_group_by_id(group_id: int) -> Optional[Dict]:
         print(f"Error getting group by ID {group_id}: {e}")
         return None
 
-def get_group_by_name(group_name: str) -> Optional[Dict]:
-    """Get a specific group by name"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute(f"SELECT id FROM {GROUPS_TABLE} WHERE name = ?", (group_name,))
-        group_row = cursor.fetchone()
-        
-        if group_row:
-            return get_group_by_id(group_row['id'])
-        return None
-    except Exception as e:
-        print(f"Error getting group by name {group_name}: {e}")
-        return None
 
 def create_group(group_name: str, user_id: int) -> Optional[int]:
     """Create a new group and return the group ID"""
@@ -707,34 +692,3 @@ def update_group_name(group_id: int, new_name: str) -> bool:
     except Exception as e:
         print(f"Error updating group name: {e}")
         return False
-
-def cleanup_user_ids():
-    """Clean up user IDs in groups - remove invalid entries"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Get all groups
-        cursor.execute(f"SELECT id, users FROM {GROUPS_TABLE}")
-        groups = cursor.fetchall()
-        
-        for group in groups:
-            if group['users']:
-                try:
-                    users = json.loads(group['users'])
-                    # Filter out invalid user IDs (keep only integers)
-                    valid_users = [uid for uid in users if isinstance(uid, int)]
-                    
-                    if len(valid_users) != len(users):
-                        # Update with cleaned user list
-                        cursor.execute(f"UPDATE {GROUPS_TABLE} SET users = ? WHERE id = ?", 
-                                     (json.dumps(valid_users), group['id']))
-                        print(f"Cleaned user IDs for group {group['id']}: removed {len(users) - len(valid_users)} invalid entries")
-                except Exception as e:
-                    print(f"Error cleaning user IDs for group {group['id']}: {e}")
-        
-        conn.commit()
-        return True
-    except Exception as e:
-        print(f"Error in cleanup_user_ids: {e}")
-        return False 

@@ -1,6 +1,6 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from utils import load_data, find_group_for_user, create_personal_group, save_data, load_user_data, update_all_group_messages
+from utils import load_data, find_group_for_user, load_user_data, update_all_group_messages
 from database import remove_last_entry_from_group
 
 async def delete_bottle(update: Update, context: ContextTypes.DEFAULT_TYPE):

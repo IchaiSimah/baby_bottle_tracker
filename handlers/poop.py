@@ -1,9 +1,8 @@
 from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ContextTypes, ConversationHandler, MessageHandler, filters, CallbackQueryHandler
+from telegram.ext import ContextTypes, ConversationHandler
 from zoneinfo import ZoneInfo
-from utils import load_data, save_data, find_group_for_user, create_personal_group, is_valid_time, normalize_time, getValidDate, delete_user_message, update_main_message, ensure_main_message_exists, set_group_message_info, load_user_data,  update_all_group_messages
-from config import TEST_MODE
+from utils import load_data, save_data, find_group_for_user, create_personal_group, is_valid_time, normalize_time, delete_user_message, update_main_message, set_group_message_info, load_user_data,  update_all_group_messages
 from database import add_poop_to_group
 
 ASK_POOP_TIME, ASK_POOP_INFO = range(2)
@@ -274,28 +273,3 @@ async def handle_poop_info(update: Update, context: ContextTypes.DEFAULT_TYPE, i
             await update_main_message(context, error_msg, InlineKeyboardMarkup([[InlineKeyboardButton("❌ Annuler", callback_data="cancel")]]))
         return ConversationHandler.END
 
-async def cancel_poop(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Cancel the add poop flow and return to main"""
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = update.effective_user.id
-    data = load_user_data(user_id)
-    if not data:
-        data = load_data()
-    
-    group_id = find_group_for_user(data, user_id)
-    
-    # Clear conversation state
-    context.user_data.pop('conversation_state', None)
-    
-    from handlers.queries import get_main_message_content
-    message_text, keyboard = get_main_message_content(data, group_id)
-    
-    await query.edit_message_text(
-        text=message_text,
-        reply_markup=keyboard,
-        parse_mode="Markdown"
-    )
-    
-    return ConversationHandler.END

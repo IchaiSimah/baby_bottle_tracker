@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 from zoneinfo import ZoneInfo
-from utils import load_data, save_data, find_group_for_user, create_personal_group, is_valid_time, normalize_time, getValidDate, delete_user_message, update_main_message, ensure_main_message_exists, set_group_message_info, load_user_data, update_all_group_messages, run_daily_cleanup
+from utils import load_data, save_data, find_group_for_user, create_personal_group, is_valid_time, normalize_time, delete_user_message, update_main_message, ensure_main_message_exists, set_group_message_info, load_user_data, update_all_group_messages, run_daily_cleanup
 from config import TEST_MODE
 from database import add_entry_to_group
 
