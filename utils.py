@@ -148,16 +148,17 @@ def should_run_cleanup():
     global last_cleanup_date
     current_date = datetime.now().date()
     
-    with cleanup_lock:
-        if last_cleanup_date != current_date:
-            last_cleanup_date = current_date
-            return True
+    if last_cleanup_date != current_date:
+        return True
     return False
 
 def run_daily_cleanup():
     """Run daily cleanup tasks"""
-    if should_run_cleanup():
-        cleanup_old_data()
+    with cleanup_lock:  # ← Verrou déplacé ici pour protéger toute l'opération
+        if should_run_cleanup():
+            global last_cleanup_date
+            last_cleanup_date = datetime.now().date()
+            cleanup_old_data()
 
 def clean_data(data):
     """Clean data - no longer needed with SQLite"""

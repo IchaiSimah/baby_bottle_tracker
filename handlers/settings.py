@@ -313,7 +313,7 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
         row = []
         for value in quick_choices:
             text = f"{value}ml {'✅' if value == current else ''}"
-            keyboard.append([InlineKeyboardButton(text, callback_data=f"set_last_bottle_{value}")])
+            row.append(InlineKeyboardButton(text, callback_data=f"set_last_bottle_{value}"))
             if len(row) == 2:
                 keyboard.append(row)
                 row = []

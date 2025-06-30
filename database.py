@@ -1,6 +1,7 @@
 import os
 import json
 import sqlite3
+import shutil
 from datetime import datetime, date
 from typing import Dict, List, Optional, Any
 from config import DATABASE_PATH, GROUPS_TABLE, ENTRIES_TABLE, POOP_TABLE, USER_MESSAGES_TABLE
@@ -624,14 +625,57 @@ def clear_user_message_info(group_id: int, user_id: int) -> bool:
         print(f"Error clearing user message info: {e}")
         return False
 
-def cleanup_old_data() -> bool:
-    """Clean up old data (entries older than 30 days)"""
+def create_database_backup() -> bool:
+    """Create a backup of the database before cleanup"""
     try:
+        if not os.path.exists(DATABASE_PATH):
+            print("Database file not found, skipping backup")
+            return False
+        
+        # Create backup directory if it doesn't exist
+        backup_dir = os.path.join(os.path.dirname(DATABASE_PATH), "backups")
+        os.makedirs(backup_dir, exist_ok=True)
+        
+        # Generate backup filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_filename = f"baby_bottle_tracker_backup_{timestamp}.db"
+        backup_path = os.path.join(backup_dir, backup_filename)
+        
+        # Copy database file
+        shutil.copy2(DATABASE_PATH, backup_path)
+        
+        # Keep only the last 7 backups to avoid disk space issues
+        backup_files = [f for f in os.listdir(backup_dir) if f.startswith("baby_bottle_tracker_backup_") and f.endswith(".db")]
+        backup_files.sort(reverse=True)  # Sort by name (timestamp) descending
+        
+        if len(backup_files) > 7:
+            for old_backup in backup_files[7:]:
+                old_backup_path = os.path.join(backup_dir, old_backup)
+                try:
+                    os.remove(old_backup_path)
+                    print(f"Removed old backup: {old_backup}")
+                except Exception as e:
+                    print(f"Failed to remove old backup {old_backup}: {e}")
+        
+        print(f"Database backup created: {backup_path}")
+        return True
+    except Exception as e:
+        print(f"Error creating database backup: {e}")
+        return False
+
+def cleanup_old_data() -> bool:
+    """Clean up old data (entries older than 32 days) and create backup"""
+    try:
+        # Create backup before cleanup
+        backup_success = create_database_backup()
+        if not backup_success:
+            print("Warning: Backup failed, but continuing with cleanup")
+        
         conn = get_db_connection()
         cursor = conn.cursor()
         
         from datetime import timedelta
-        cutoff_date = (datetime.now(ZoneInfo('UTC')) - timedelta(days=30)).isoformat()
+        cutoff_date = (datetime.now(ZoneInfo('UTC')) - timedelta(days=32)).isoformat()
         
         # Delete old entries
         cursor.execute(f"DELETE FROM {ENTRIES_TABLE} WHERE time < ?", (cutoff_date,))
