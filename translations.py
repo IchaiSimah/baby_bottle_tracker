@@ -193,6 +193,12 @@ TRANSLATIONS = {
         "en": "**🕐 Timezone:**\n• ⏰ Offset: {}h\n• 🕐 Current time: {}\n\n",
         "he": "**🕐 אזור זמן:**\n• ⏰ הפרש: {}ש\n• 🕐 שעה נוכחית: {}\n\n"
     },
+    "pin_message": {
+        "fr": "**Pensez à epingler le bot dans les paramètres telegram**\n\n",
+        "en": "**Think to pin the bot in telegram setting**\n\n",
+        "he": "**חשבו לנעוץ את הבוט בהגדרות טלגרם**\n\n"
+    },
+
     "settings_modify": {
         "fr": "**🔧 Modifier les paramètres :**",
         "en": "**🔧 Modify settings:**",

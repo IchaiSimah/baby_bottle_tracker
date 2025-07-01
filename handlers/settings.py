@@ -42,6 +42,7 @@ async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = t("settings_title", language)
     message += t("settings_display", language, bottles_to_show, poops_to_show, last_bottle)
     message += t("settings_timezone", language, time_difference, adjusted_time.strftime('%H:%M'))
+    message += t("pin_message", language)
     message += t("settings_modify", language)
     
     # Create keyboard for settings
