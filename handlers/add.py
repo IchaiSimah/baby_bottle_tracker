@@ -4,7 +4,8 @@ from telegram.ext import ContextTypes, ConversationHandler
 from zoneinfo import ZoneInfo
 from utils import load_data, save_data, find_group_for_user, create_personal_group, is_valid_time, normalize_time, delete_user_message, update_main_message, ensure_main_message_exists, set_group_message_info, load_user_data, update_all_group_messages, run_daily_cleanup
 from config import TEST_MODE
-from database import add_entry_to_group
+from database import add_entry_to_group, get_language
+from translations import t
 
 ASK_BOTTLE_TIME, ASK_BOTTLE_AMOUNT = range(2)
 
@@ -27,6 +28,7 @@ async def add_bottle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     user_id = update.effective_user.id
+    language = get_language(user_id)
     
     # Use optimized data loading
     data = load_user_data(user_id)
@@ -40,7 +42,7 @@ async def add_bottle(update: Update, context: ContextTypes.DEFAULT_TYPE):
             data = load_user_data(user_id)
     
     if not data:
-        error_msg = "❌ Oups ! Impossible de trouver ou créer votre groupe personnel pour le moment. Veuillez réessayer plus tard."
+        error_msg = t("error_create_group", language)
         await query.edit_message_text(error_msg)
         return
     
@@ -76,11 +78,11 @@ async def add_bottle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Add "Now" and "Cancel" buttons
     keyboard.append([
-        InlineKeyboardButton("🕐 Maintenant", callback_data="bottle_time_now"),
-        InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+        InlineKeyboardButton(t("btn_now", language), callback_data="bottle_time_now"),
+        InlineKeyboardButton(t("btn_cancel", language), callback_data="cancel")
     ])
     
-    message = "⏰ **À quelle heure a eu lieu ce biberon ?**\n\n*Ou tapez une heure manuellement (ex: 14:30)*"
+    message = t("add_bottle_time_question", language)
     
     # Set conversation state for text input
     context.user_data['conversation_state'] = 'bottle_time'
@@ -111,6 +113,7 @@ async def handle_bottle_time(update: Update, context: ContextTypes.DEFAULT_TYPE,
         await delete_user_message(context, update.effective_chat.id, update.message.message_id)
     
     user_id = update.effective_user.id
+    language = get_language(user_id)
     
     # Use optimized data loading
     data = load_user_data(user_id)
@@ -119,7 +122,7 @@ async def handle_bottle_time(update: Update, context: ContextTypes.DEFAULT_TYPE,
         data = load_data()
         group_id = find_group_for_user(data, user_id)
         if not group_id or group_id not in data:
-            error_msg = "❌ Oups ! Impossible de trouver ou créer votre groupe personnel pour le moment. Veuillez réessayer plus tard."
+            error_msg = t("error_create_group", language)
             if hasattr(update, 'message') and update.message:
                 await update.message.reply_text(error_msg)
             elif hasattr(update, 'callback_query') and update.callback_query:
@@ -141,19 +144,19 @@ async def handle_bottle_time(update: Update, context: ContextTypes.DEFAULT_TYPE,
         else:
             normalized_time = normalize_time(time_str)
             if not is_valid_time(normalized_time):
-                error_msg = "❌ Format d'heure invalide. Veuillez réessayer avec un format comme 14:30."
+                error_msg = t("error_invalid_time", language)
                 if query:
                     await query.edit_message_text(
                         error_msg,
                         reply_markup=InlineKeyboardMarkup([[
-                            InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+                            InlineKeyboardButton(t("btn_cancel", language), callback_data="cancel")
                         ]])
                     )
                 else:
                     # Use utility function to update main message
                     await ensure_main_message_exists(update, context, data, group_id)
                     await update_main_message(context, error_msg, InlineKeyboardMarkup([[
-                        InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+                        InlineKeyboardButton(t("btn_cancel", language), callback_data="cancel")
                     ]]))
                 return ASK_BOTTLE_TIME
             
@@ -189,9 +192,9 @@ async def handle_bottle_time(update: Update, context: ContextTypes.DEFAULT_TYPE,
             keyboard.append(row)
         
         # Add cancel button
-        keyboard.append([InlineKeyboardButton("❌ Annuler", callback_data="cancel")])
+        keyboard.append([InlineKeyboardButton(t("btn_cancel", language), callback_data="cancel")])
 
-        message = f"🍼 **Quelle quantité a été bue ? (en ml)**\n\n*Ou tapez une quantité manuellement (ex: 110)*"
+        message = t("add_bottle_amount_question", language)
         
         # Set conversation state for text input
         context.user_data['conversation_state'] = 'bottle_amount'
@@ -211,12 +214,12 @@ async def handle_bottle_time(update: Update, context: ContextTypes.DEFAULT_TYPE,
         
         return ASK_BOTTLE_AMOUNT
     except Exception as e:
-        error_msg = f"❌ Erreur: {str(e)}"
+        error_msg = t("error_general", language)
         if query:
             await query.edit_message_text(
                 error_msg,
                 reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+                    InlineKeyboardButton(t("btn_cancel", language), callback_data="cancel")
                 ]])
             )
         else:
@@ -229,7 +232,7 @@ async def handle_bottle_time(update: Update, context: ContextTypes.DEFAULT_TYPE,
             group_id = find_group_for_user(data, user_id)
             await ensure_main_message_exists(update, context, data, group_id)
             await update_main_message(context, error_msg, InlineKeyboardMarkup([[
-                InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+                InlineKeyboardButton(t("btn_cancel", language), callback_data="cancel")
             ]]))
         return ConversationHandler.END
 
@@ -250,28 +253,30 @@ async def handle_bottle_amount(update: Update, context: ContextTypes.DEFAULT_TYP
         # Delete user message for clean chat
         await delete_user_message(context, update.effective_chat.id, update.message.message_id)
     
+    user_id = update.effective_user.id
+    language = get_language(user_id)
+    
     try:
         amount = int(amount_str)
         dt = context.user_data.get('bottle_time')
         if not dt:
-            error_msg = "❌ Erreur: temps non trouvé. Veuillez recommencer."
+            error_msg = t("error_not_found_time", language)
             if query:
                 await query.edit_message_text(
                     error_msg,
                     reply_markup=InlineKeyboardMarkup([[
-                        InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+                        InlineKeyboardButton(t("btn_cancel", language), callback_data="cancel")
                     ]])
                 )
             else:
                 # Use utility function to update main message
-                user_id = update.effective_user.id
                 data = load_user_data(user_id)
                 if not data:
                     data = load_data()
                 group_id = find_group_for_user(data, user_id)
                 await ensure_main_message_exists(update, context, data, group_id)
                 await update_main_message(context, error_msg, InlineKeyboardMarkup([[
-                    InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+                    InlineKeyboardButton(t("btn_cancel", language), callback_data="cancel")
                 ]]))
                 # Store the message ID for future text inputs
                 if context.user_data.get('main_message_id') and context.user_data.get('chat_id'):
@@ -300,8 +305,8 @@ async def handle_bottle_amount(update: Update, context: ContextTypes.DEFAULT_TYP
         
         # Return to main message with updated data
         from handlers.queries import get_main_message_content
-        message_text, keyboard = get_main_message_content(data, group_id)
-        success_text = f"✅ **Biberon ajouté !**\n\n{amount}ml à {dt.strftime('%H:%M')}\n\n{message_text}"
+        message_text, keyboard = get_main_message_content(data, group_id, language)
+        success_text = t("bottle_added_success", language, amount, dt.strftime('%H:%M'), message_text)
         
         if query:
             await query.edit_message_text(
@@ -326,24 +331,23 @@ async def handle_bottle_amount(update: Update, context: ContextTypes.DEFAULT_TYP
         
         return ConversationHandler.END
     except ValueError:
-        error_msg = "❌ Quantité invalide. Veuillez réessayer."
+        error_msg = t("error_invalid_amount", language)
         if query:
             await query.edit_message_text(
                 error_msg,
                 reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+                    InlineKeyboardButton(t("btn_cancel", language), callback_data="cancel")
                 ]])
             )
         else:
             # Use utility function to update main message
-            user_id = update.effective_user.id
             data = load_user_data(user_id)
             if not data:
                 data = load_data()
             group_id = find_group_for_user(data, user_id)
             await ensure_main_message_exists(update, context, data, group_id)
             await update_main_message(context, error_msg, InlineKeyboardMarkup([[
-                InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+                InlineKeyboardButton(t("btn_cancel", language), callback_data="cancel")
             ]]))
             # Store the message ID for future text inputs
             if context.user_data.get('main_message_id') and context.user_data.get('chat_id'):
@@ -351,12 +355,12 @@ async def handle_bottle_amount(update: Update, context: ContextTypes.DEFAULT_TYP
                 await save_data(data, context)
         return ASK_BOTTLE_AMOUNT
     except Exception as e:
-        error_msg = f"❌ Erreur: {str(e)}"
+        error_msg = t("error_general", language)
         if query:
             await query.edit_message_text(
                 error_msg,
                 reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+                    InlineKeyboardButton(t("btn_cancel", language), callback_data="cancel")
                 ]])
             )
         else:
@@ -369,7 +373,7 @@ async def handle_bottle_amount(update: Update, context: ContextTypes.DEFAULT_TYP
             group_id = find_group_for_user(data, user_id)
             await ensure_main_message_exists(update, context, data, group_id)
             await update_main_message(context, error_msg, InlineKeyboardMarkup([[
-                InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+                InlineKeyboardButton(t("btn_cancel", language), callback_data="cancel")
             ]]))
         return ConversationHandler.END
 
@@ -379,6 +383,7 @@ async def cancel_bottle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     user_id = update.effective_user.id
+    language = get_language(user_id)
     data = load_user_data(user_id)
     if not data:
         data = load_data()
@@ -389,7 +394,7 @@ async def cancel_bottle(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop('conversation_state', None)
     
     from handlers.queries import get_main_message_content
-    message_text, keyboard = get_main_message_content(data, group_id)
+    message_text, keyboard = get_main_message_content(data, group_id, language)
     
     await query.edit_message_text(
         text=message_text,

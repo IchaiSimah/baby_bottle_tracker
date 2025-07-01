@@ -67,6 +67,10 @@ services:
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (group_id) REFERENCES groups (id)
           );
+          CREATE TABLE IF NOT EXISTS languages (
+            user_id INTEGER PRIMARY KEY,
+            language TEXT NOT NULL
+          );
           CREATE INDEX IF NOT EXISTS idx_entries_group_time ON entries(group_id, time);
           CREATE INDEX IF NOT EXISTS idx_poop_group_time ON poop(group_id, time);
           CREATE INDEX IF NOT EXISTS idx_user_messages_group_user ON user_messages(group_id, user_id);

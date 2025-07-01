@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from datetime import datetime, time, timedelta
 from config import TEST_MODE
 from zoneinfo import ZoneInfo
+from translations import t
 import threading
 from database import (
     get_all_groups, create_group, set_user_message_info, get_user_message_info, clear_user_message_info, cleanup_old_data, update_group,
@@ -172,10 +173,10 @@ async def update_main_message(context, message_text, keyboard, parse_mode="Markd
         print("No message ID or chat ID found")
         data = load_data()
         group = find_group_for_user(data, user_id)
-        message_info = get_group_message_info(data, group, user_id)
-        if message_info:
-            message_id = message_info.get('message_id')
-            chat_id = message_info.get('chat_id')
+        message_id, chat_id = get_user_message_info(group, user_id)
+        if not message_id or not chat_id:
+            print("No message ID or chat ID found")
+            return False
     
     if message_id and chat_id:
         try:

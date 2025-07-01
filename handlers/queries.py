@@ -2,6 +2,8 @@ from datetime import datetime
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 from utils import load_user_data
+from database import get_language
+from translations import t
 
 def format_time(time: str) -> str:
     dt_parts = time.split(' ')
@@ -11,12 +13,12 @@ def format_time(time: str) -> str:
     minute = time_parts[1]
     return f"{hour}:{minute} le {date_parts[0]}-{date_parts[1]}"
 
-def get_main_message_content(data, group_id):
+def get_main_message_content(data, group_id, language="fr"):
     """Generate the main message content with last 5 bottles and last poop"""
     # Handle case where group_id might be None or not in data
     if not group_id or group_id not in data:
-        return "❌ Oups ! Impossible de charger vos données pour le moment. Veuillez réessayer.", InlineKeyboardMarkup([[
-            InlineKeyboardButton("🔄 Actualiser", callback_data="refresh")
+        return t("error_load_data", language), InlineKeyboardMarkup([[
+            InlineKeyboardButton(t("btn_refresh", language), callback_data="refresh")
         ]])
     
     group_data = data[group_id]
@@ -27,16 +29,16 @@ def get_main_message_content(data, group_id):
     bottles_to_show = group_data.get("bottles_to_show", 5)
     poops_to_show = group_data.get("poops_to_show", 1)
     
-    message = "🍼 **Suivi Bébé - Tableau de Bord**\n\n"
+    message = t("main_dashboard", language)
     
     # Add group name to the message
     group_name = group_data.get('name', 'Groupe inconnu')
-    message += f"**👥 Groupe :** `{group_name}`\n\n"
+    message += t("main_group", language, group_name)
     
     # Show last bottles
     if entries:
         last_entries = entries[:bottles_to_show]
-        message += f"🍼 **Derniers biberons :**\n"
+        message += t("main_last_bottles", language)
         entries_text = ""
         for entry in last_entries:
             if isinstance(entry['time'], datetime):
@@ -46,15 +48,14 @@ def get_main_message_content(data, group_id):
             entries_text += f"`{time_str}` - *{entry['amount']}ml* 🍼\n"
         message += entries_text
     else:
-        message += "🍼 **pensez à mettre l'heure a jour dans les paramètres !**\n"
-        message += "_Aucun biberon enregistré pour le moment_ 📝\n"
+        message += t("main_no_bottles", language)
     
     message += "\n"
     
     # Show last poop(s)
     if poop:
         last_poops = poop[:poops_to_show]
-        message += f"💩 **Dernier{'s' if poops_to_show > 1 else ''} caca{'s' if poops_to_show > 1 else ''} :**\n"
+        message += t("main_last_poops", language, "s" if poops_to_show > 1 else "", "s" if poops_to_show > 1 else "")
         poop_text = ""
         for p in last_poops:
             if isinstance(p['time'], datetime):
@@ -67,24 +68,24 @@ def get_main_message_content(data, group_id):
             poop_text += " 💩\n"
         message += poop_text
     else:
-        message += "_Aucu enregistré pour le moment_ 📝\n"
+        message += t("main_no_poops", language)
     
     # Create inline keyboard
     keyboard = [
         [
-            InlineKeyboardButton("🍼 Biberon", callback_data="add_bottle"),
-            InlineKeyboardButton("💩 Caca", callback_data="add_poop"),
+            InlineKeyboardButton(t("btn_bottle", language), callback_data="add_bottle"),
+            InlineKeyboardButton(t("btn_poop", language), callback_data="add_poop"),
         ],
         [
-            InlineKeyboardButton("❌ Supprimer", callback_data="remove_bottle"),
-            InlineKeyboardButton("🕯️ Shabbat", callback_data="shabbat"),
+            InlineKeyboardButton(t("btn_delete", language), callback_data="remove_bottle"),
+            InlineKeyboardButton(t("btn_shabbat", language), callback_data="shabbat"),
         ],
         [
-            InlineKeyboardButton("📊 Statistiques", callback_data="stats"),
-            InlineKeyboardButton("📄 PDF", callback_data="pdf_menu")
+            InlineKeyboardButton(t("btn_stats", language), callback_data="stats"),
+            InlineKeyboardButton(t("btn_pdf", language), callback_data="pdf_menu")
         ],
         [
-            InlineKeyboardButton("⚙️ Paramètres", callback_data="settings")
+            InlineKeyboardButton(t("btn_settings", language), callback_data="settings")
         ]
     ]
     return message, InlineKeyboardMarkup(keyboard)
@@ -92,11 +93,12 @@ def get_main_message_content(data, group_id):
 def get_main_message_content_for_user(user_id: int):
     """Optimized version that loads only user-specific data"""
     data = load_user_data(user_id)
+    language = get_language(user_id)
     if not data:
-        return "❌ Oups ! Impossible de charger vos données pour le moment. Veuillez réessayer.", InlineKeyboardMarkup([[
-            InlineKeyboardButton("🔄 Actualiser", callback_data="refresh")
+        return t("error_load_data", language), InlineKeyboardMarkup([[
+            InlineKeyboardButton(t("btn_refresh", language), callback_data="refresh")
         ]])
     
     # Get the first (and only) group in the data
     group_id = list(data.keys())[0]
-    return get_main_message_content(data, group_id)
+    return get_main_message_content(data, group_id, language)

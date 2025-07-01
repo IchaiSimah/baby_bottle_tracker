@@ -3,6 +3,8 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from zoneinfo import ZoneInfo
 from utils import load_data, find_group_for_user, load_user_stats
+from database import get_language
+from translations import t
 import os
 import requests
 
@@ -19,6 +21,7 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     user_id = user.id
+    language = get_language(user_id)
     
     # Use optimized stats loading
     stats_data = load_user_stats(user_id, 5)
@@ -27,7 +30,7 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = load_data()
         group_id = find_group_for_user(data, user_id)
         if not group_id or group_id not in data:
-            error_msg = "❌ Oups ! Impossible de trouver ou créer votre groupe personnel pour le moment. Veuillez réessayer plus tard."
+            error_msg = t("error_create_group", language)
             if hasattr(update, 'message') and update.message:
                 await update.message.reply_text(error_msg)
             elif hasattr(update, 'callback_query') and update.callback_query:
@@ -65,33 +68,27 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
     
     # Generate statistics message
-    message = "📊 **Statistiques des 5 derniers jours** 📈\n\n"
+    message = t("stats_title", language)
     
     total_bottles_5days = sum(stats[d]["bottles"] for d in stats)
     total_ml_5days = sum(stats[d]["total_ml"] for d in stats)
     total_poops_5days = sum(stats[d]["poops"] for d in stats)
     
-    message += f"**📋 Résumé 5 jours :**\n"
-    message += f"• 🍼 {total_bottles_5days} biberons\n"
-    message += f"• 📏 {total_ml_5days}ml au total\n"
-    message += f"• 💩 {total_poops_5days} changements\n"
-    message += f"• 📈 Moyenne : {total_ml_5days//5 if total_bottles_5days > 0 else 0}ml/jour\n\n"
-    
-    message += "**📅 Détail par jour :**\n"
-    for date_str in sorted(stats.keys(), reverse=True):
+    message += t("stats_summary", language, total_bottles_5days, total_ml_5days, total_poops_5days, round(total_ml_5days/total_bottles_5days if total_bottles_5days > 0 else 0, 1))
+    message += t("stats_daily_detail", language)
+
+    for date_str in sorted(stats.keys()):
         day_stats = stats[date_str]
-        day_name = day_stats["date"].strftime("%A")[:3]  # Short day name
-        message += f"`{date_str} ({day_name}) : "
-        message += f"{day_stats['bottles']} biberons, "
-        message += f"{day_stats['total_ml']}ml, "
-        message += f"{day_stats['poops']} changements`\n"
+        day_name = t(day_stats["date"].strftime("%A")[:3], language)
+        message += t("stats_day_format", language, date_str, day_name, day_stats["bottles"], day_stats["total_ml"], day_stats["poops"])
+
     
     # Add loading message for AI
-    message += f"\n🤖 **Analyse IA :**\n⏳ Génération en cours..."
+    message += t("stats_ai_loading", language)
     
     # Create keyboard
     keyboard = [
-        [InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]
+        [InlineKeyboardButton(t("btn_home", language), callback_data="refresh")]
     ]
     
     # Show initial message with loading
@@ -101,12 +98,12 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="Markdown"
     )    
     # Generate AI summary in background
-    ai_summary = await generate_ai_summary(stats)
+    ai_summary = await generate_ai_summary(stats, language)
     
     # Update message with AI summary if available
     if ai_summary:
         # Remove loading message and add AI summary
-        message = message.replace("\n🤖 **Analyse IA :**\n⏳ Génération en cours...", f"\n🤖 **Analyse IA :**\n{ai_summary}")
+        message = message.replace(t("stats_ai_loading", language), f"\n🤖 **AI analysis :**\n{ai_summary}")
         
         await query.edit_message_text(
             text=message,
@@ -115,7 +112,7 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     else:
         # Remove loading message if AI failed
-        message = message.replace("\n🤖 **Analyse IA :**\n⏳ Génération en cours...", "")
+        message = message.replace(t("stats_ai_loading", language), "")
         
         await query.edit_message_text(
             text=message,
@@ -123,7 +120,7 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
 
-async def generate_ai_summary(stats):
+async def generate_ai_summary(stats, language):
     """Generate an AI summary using Gemini if available"""
     try:
         GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -153,18 +150,27 @@ async def generate_ai_summary(stats):
                 "total_ml": day_stats["total_ml"],
                 "poops": day_stats["poops"]
             })
-        
+        if language == "fr":
+            tmp = "français"
+        elif language == "en":
+            tmp = "anglais"
+        elif language == "he":
+            tmp = "hebreu"
+        else:
+            tmp = "anglais"
+                
         # Create a more detailed prompt
         prompt = f"""
-        Tu es un assistant spécialisé dans l'analyse des données de suivi de bébé.
+        Tu es un assistant spécialisé dans l'analyse des données de suivi de bébé en {tmp}.
         
         Voici les données des 5 derniers jours :
         {summary_data}
         
-        Analyse ces données et donne un résumé encourageant en français en 1-2 phrases maximum.
+        Analyse ces données et donne un résumé encourageant en 1-2 phrases maximum.
         Mentionne les tendances positives, la régularité, ou des observations utiles.
-        Sois bienveillant et encourageant pour les parents. Essaie cependant d'etre le plus pertinent possible.
-        
+        Sois bienveillant et encourageant pour les parents. Essaie cependant d'être le plus pertinent possible.
+        Commence directement par le résumé.
+        fais en sorte que le résumé soit en {tmp}.
         Exemple de format : "Votre bébé montre une belle régularité avec X biberons par jour en moyenne."
         """
         

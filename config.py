@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-TEST_MODE = False
+TEST_MODE = True
 
 # SQLite Database Configuration
 DATABASE_PATH = os.getenv("DATABASE_PATH", "data/baby_bottle_tracker.db")
@@ -13,3 +13,4 @@ GROUPS_TABLE = "groups"
 ENTRIES_TABLE = "entries"
 POOP_TABLE = "poop"
 USER_MESSAGES_TABLE = "user_messages"
+LANGUAGES_TABLE = "languages"

@@ -22,6 +22,8 @@ import matplotlib.dates as mdates
 from matplotlib import rcParams
 import numpy as np
 from collections import defaultdict
+from translations import t as tr
+from database import get_language
 
 LINK_TO_OFFICIAL_INFORMATIONS = "https://www.allobebe.fr/quantite-lait-biberon.html"
 # Dictionnaire de traductions pour le PDF
@@ -439,24 +441,14 @@ async def show_pdf_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Affiche le menu de téléchargement PDF avec sélection de langue"""
     query = update.callback_query
     await query.answer()
-    
-    message = "📄 **Téléchargement PDF - Rapport Hebdomadaire**\n\n"
-    message += "Choisissez la période pour votre rapport :\n\n"
-    message += "• 📊 **7 derniers jours** - Rapport complet de la semaine\n"
-    message += "• 📈 **30 derniers jours** - Vue d'ensemble mensuelle\n\n"
-    message += "Le PDF contiendra :\n"
-    message += "✅ Tous les biberons avec heures et quantités\n"
-    message += "✅ Tous les changements de couche\n"
-    message += "✅ Statistiques détaillées\n"
-    message += "✅ **Courbe de consommation quotidienne** 📈\n"
-    message += "✅ Traduction automatique des notes\n"
-    message += "✅ Liste chronologique mixte\n\n"
-    message += "🌍 **Langues disponibles :** Français, English, עברית"
+    language = get_language(query.from_user.id)
+    message = tr("pdf_menu", language) + "\n\n"
+
     
     keyboard = [
-        [InlineKeyboardButton("📊 7 derniers jours", callback_data="pdf_7_days")],
-        [InlineKeyboardButton("📈 30 derniers jours", callback_data="pdf_30_days")],
-        [InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]
+        [InlineKeyboardButton(tr("pdf_menu_7_days", language), callback_data="pdf_7_days")],
+        [InlineKeyboardButton(tr("pdf_menu_30_days", language), callback_data="pdf_30_days")],
+        [InlineKeyboardButton(tr("btn_home", language), callback_data="refresh")]
     ]
     
     await query.edit_message_text(
@@ -469,22 +461,17 @@ async def show_language_selection(update: Update, context: ContextTypes.DEFAULT_
     """Affiche la sélection de langue pour le PDF"""
     query = update.callback_query
     await query.answer()
-    
+    language = get_language(query.from_user.id)
     # Stocker les jours dans le contexte
     context.user_data['pdf_days'] = days
     
-    message = f"🌍 **Sélection de la langue pour le rapport {days} jours**\n\n"
-    message += "Choisissez la langue dans laquelle vous souhaitez générer le PDF :\n\n"
-    message += "🇫🇷 **Français** - Langue par défaut\n"
-    message += "🇺🇸 **English** - English version\n"
-    message += "🇮🇱 **עברית** - גרסה עברית\n\n"
-    message += "💡 Les notes personnalisées seront traduites automatiquement par IA."
+    message = tr("pdf_lang_selection", language) + "\n\n"
     
     keyboard = [
-        [InlineKeyboardButton("🇫🇷 Français", callback_data=f"pdf_lang_fr_{days}")],
-        [InlineKeyboardButton("🇺🇸 English", callback_data=f"pdf_lang_en_{days}")],
-        [InlineKeyboardButton("🇮🇱 עברית", callback_data=f"pdf_lang_he_{days}")],
-        [InlineKeyboardButton("🔙 Retour", callback_data="pdf_menu")]
+        [InlineKeyboardButton(tr("pdf_lang_fr", language), callback_data=f"pdf_lang_fr_{days}")],
+        [InlineKeyboardButton(tr("pdf_lang_en", language), callback_data=f"pdf_lang_en_{days}")],
+        [InlineKeyboardButton(tr("pdf_lang_he", language), callback_data=f"pdf_lang_he_{days}")],
+        [InlineKeyboardButton(tr("btn_cancel", language), callback_data="pdf_menu")]
     ]
     
     await query.edit_message_text(

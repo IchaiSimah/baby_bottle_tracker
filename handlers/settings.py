@@ -4,7 +4,8 @@ from utils import load_data, save_data, find_group_for_user, create_personal_gro
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from config import TEST_MODE
-from database import update_group
+from database import update_group, get_language, update_language
+from translations import t
 
 async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show settings menu"""
@@ -13,6 +14,7 @@ async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     data = load_data()
     user_id = update.effective_user.id
+    language = get_language(user_id)
     group_id = find_group_for_user(data, user_id)
     if not group_id:
         group_id = create_personal_group(data, user_id)
@@ -20,7 +22,7 @@ async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data = load_data()
     
     if not group_id or group_id not in data:
-        error_msg = "❌ Oups ! Impossible de trouver ou créer votre groupe personnel pour le moment. Veuillez réessayer plus tard."
+        error_msg = t("error_create_group", language)
         if hasattr(update, 'message') and update.message:
             await update.message.reply_text(error_msg)
         elif hasattr(update, 'callback_query') and update.callback_query:
@@ -37,32 +39,27 @@ async def show_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     time_difference = td
     adjusted_time = datetime.now(ZoneInfo("UTC")) + timedelta(hours=time_difference)
     
-    message = "⚙️ **Paramètres de votre suivi** 🔧\n\n"
-    message += f"**📱 Affichage principal :**\n"
-    message += f"• 🍼 Biberons affichés : {bottles_to_show}\n"
-    message += f"• 💩 Changements de couches affichés : {poops_to_show}\n"
-    message += f"• 🍼 Taille du  biberon : {last_bottle}ml\n\n"
-    message += f"**🕐 Fuseau horaire :**\n"
-    message += f"• ⏰ Décalage : {time_difference:+d}h\n"
-    message += f"• 🕐 Heure actuelle : {adjusted_time.strftime('%H:%M')}\n\n"
-    message += "**🔧 Modifier les paramètres :**"
+    message = t("settings_title", language)
+    message += t("settings_display", language, bottles_to_show, poops_to_show, last_bottle)
+    message += t("settings_timezone", language, time_difference, adjusted_time.strftime('%H:%M'))
+    message += t("settings_modify", language)
     
     # Create keyboard for settings
     keyboard = [
         [
-            InlineKeyboardButton(f"🍼 Biberons : {bottles_to_show}", callback_data="setting_bottles"),
-            InlineKeyboardButton(f"💩 Couches: {poops_to_show}", callback_data="setting_poops")
+            InlineKeyboardButton(t("btn_bottles_count", language, bottles_to_show), callback_data="setting_bottles"),
+            InlineKeyboardButton(t("btn_poops_count", language, poops_to_show), callback_data="setting_poops")
         ],
         [
-            InlineKeyboardButton(f"🍼 Taille biberon", callback_data="setting_last_bottle"),
-            InlineKeyboardButton("🕐 Changer l'heure", callback_data="setting_timezone")
+            InlineKeyboardButton(t("btn_bottle_size", language), callback_data="setting_last_bottle"),
+            InlineKeyboardButton(t("btn_change_time", language), callback_data="setting_timezone")
         ],
         [
-            InlineKeyboardButton("👥 Groupes", callback_data="groups")
+            InlineKeyboardButton(t("btn_groups", language), callback_data="groups"),
+            InlineKeyboardButton(t("btn_language", language), callback_data="setting_language")
         ],
         [
-            InlineKeyboardButton("🏠 Accueil", callback_data="refresh"),
-            InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+            InlineKeyboardButton(t("btn_home", language), callback_data="refresh")
         ]
     ]
     
@@ -83,10 +80,11 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
     
     data = load_data()
     user_id = update.effective_user.id
+    language = get_language(user_id)
     group_id = find_group_for_user(data, user_id)
     
     if not group_id or group_id not in data:
-        error_msg = "❌ Oups ! Impossible de trouver ou créer votre groupe personnel pour le moment. Veuillez réessayer plus tard."
+        error_msg = t("error_create_group", language)
         if hasattr(update, 'message') and update.message:
             await update.message.reply_text(error_msg)
         elif hasattr(update, 'callback_query') and update.callback_query:
@@ -109,9 +107,9 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
                     row.append(InlineKeyboardButton(text, callback_data=f"set_bottles_{option}"))
             keyboard.append(row)
         
-        keyboard.append([InlineKeyboardButton("❌ Annuler", callback_data="settings")])
+        keyboard.append([InlineKeyboardButton(t("btn_cancel", language), callback_data="settings")])
         
-        message = "🍼 **Combien de biberons souhaitez-vous voir affichés ?**"
+        message = t("bottles_count_question", language)
         
         await query.edit_message_text(
             text=message,
@@ -135,9 +133,9 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
                     row.append(InlineKeyboardButton(text, callback_data=f"set_poops_{option}"))
             keyboard.append(row)
         
-        keyboard.append([InlineKeyboardButton("❌ Annuler", callback_data="settings")])
+        keyboard.append([InlineKeyboardButton(t("btn_cancel", language), callback_data="settings")])
         
-        message = "💩 **Combien de changements souhaitez-vous voir affichés ?**"
+        message = t("poops_count_question", language)
         
         await query.edit_message_text(
             text=message,
@@ -172,10 +170,7 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
         current_time = datetime.now(ZoneInfo("UTC")) + timedelta(hours=current_diff)
         utc_time = datetime.now(ZoneInfo("UTC"))
         
-        message = f"🕐 **Configuration de l'heure** ⏰\n\n" \
-                 f"**🕐 Heure actuellement enregistrée :** {current_time.strftime('%H:%M')}\n" \
-                 f"**🌍 Heure UTC du serveur :** {utc_time.strftime('%H:%M')}\n\n" \
-                 f"**Quelle heure est-il chez vous actuellement ?**"
+        message = t("timezone_title", language, current_time.strftime('%H:%M'), utc_time.strftime('%H:%M'))
         
         # Create keyboard with time suggestions (current time ± 2 hours)
         keyboard = []
@@ -197,10 +192,10 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
                     row.append(InlineKeyboardButton(time_str, callback_data=f"set_time_{time_str}"))
             keyboard.append(row)
         
-        keyboard.append([InlineKeyboardButton("❌ Annuler", callback_data="settings")])
+        keyboard.append([InlineKeyboardButton(t("btn_cancel", language), callback_data="settings")])
         
         # Add manual input option
-        keyboard.append([InlineKeyboardButton("✏️ Saisir manuellement", callback_data="manual_time_input")])
+        keyboard.append([InlineKeyboardButton(t("btn_manual_input", language), callback_data="manual_time_input")])
         
         await query.edit_message_text(
             text=message,
@@ -226,22 +221,16 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
             # Recharge les données du groupe après la modification
             data = load_data()
             adjusted_time = datetime.now(ZoneInfo("UTC")) + timedelta(hours=diff_hour)
-            message = f"✅ **Heure mise à jour avec succès !**\n\n" \
-                     f"**Votre heure:** {time_str}\n" \
-                     f"**Heure UTC:** {now.strftime('%H:%M')}\n" \
-                     f"**Décalage calculé:** {diff_hour:+d}h\n\n" \
-                     f"🕐 L'heure du bot est maintenant synchronisée avec votre fuseau horaire."
-            keyboard = [[InlineKeyboardButton("🏠 Retour aux paramètres", callback_data="settings")]]
+            message = t("timezone_success", language, time_str, now.strftime('%H:%M'), diff_hour)
+            keyboard = [[InlineKeyboardButton(t("btn_return_settings", language), callback_data="settings")]]
             await query.edit_message_text(
                 text=message,
                 reply_markup=InlineKeyboardMarkup(keyboard),
                 parse_mode="Markdown"
             )
         except ValueError:
-            message = "❌ **Erreur:** Format d'heure invalide.\n\n" \
-                     f"**Format attendu:** HH:MM ou H:MM\n" \
-                     f"**Exemples:** 14:30, 7:30"
-            keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="settings")]]
+            message = t("timezone_error", language)
+            keyboard = [[InlineKeyboardButton(t("btn_cancel", language), callback_data="settings")]]
             await query.edit_message_text(
                 text=message,
                 reply_markup=InlineKeyboardMarkup(keyboard),
@@ -256,9 +245,9 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
         for group in groups:
             keyboard.append([InlineKeyboardButton(group, callback_data=f"group_{group}")])
         
-        keyboard.append([InlineKeyboardButton("❌ Annuler", callback_data="cancel")])
+        keyboard.append([InlineKeyboardButton(t("btn_cancel", language), callback_data="cancel")])
         
-        message = "👥 **Choisissez un groupe:**"
+        message = t("groups_title", language)
         
         await query.edit_message_text(
             text=message,
@@ -283,9 +272,9 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
         # Clear conversation state when canceling
         context.user_data.pop('conversation_state', None)
         await query.edit_message_text(
-            "❌ Opération annulée.",
+            t("operation_cancelled", language),
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🏠 Accueil", callback_data="refresh")
+                InlineKeyboardButton(t("btn_home", language), callback_data="refresh")
             ]])
         )
     
@@ -296,8 +285,8 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
     elif setting == "manual_time_input":
         # Set the conversation state for manual timezone input
         context.user_data['conversation_state'] = 'timezone_input'
-        message = "✏️ **Saisissez l'heure locale au format HH:MM (ex: 14:30)**"
-        keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="settings")]]
+        message = t("timezone_manual_input", language)
+        keyboard = [[InlineKeyboardButton(t("btn_cancel", language), callback_data="settings")]]
         await query.edit_message_text(
             text=message,
             reply_markup=InlineKeyboardMarkup(keyboard),
@@ -319,8 +308,8 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
                 row = []
         if row:
             keyboard.append(row)
-        keyboard.append([InlineKeyboardButton("❌ Annuler", callback_data="settings")])
-        message = f"🍼 **Définir la quantité du biberon (ml)**\n\nActuel : {current}ml\n\nChoisissez une valeur ou saisissez-la manuellement."
+        keyboard.append([InlineKeyboardButton(t("btn_cancel", language), callback_data="settings")])
+        message = t("bottle_size_question", language, current)
         await query.edit_message_text(
             text=message,
             reply_markup=InlineKeyboardMarkup(keyboard),
@@ -331,18 +320,51 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
         data[group_id]["last_bottle"] = value
         update_group(int(group_id), data[group_id])
         data = load_data()
-        message = f"✅ Taille du biberon mise à jour : {value}ml"
-        keyboard = [[InlineKeyboardButton("🏠 Retour aux paramètres", callback_data="settings")]]
+        message = t("bottle_size_success", language, value)
+        keyboard = [[InlineKeyboardButton(t("btn_return_settings", language), callback_data="settings")]]
         await query.edit_message_text(
             text=message,
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="Markdown"
         )
+    elif setting == "language":
+            # Show poop count options
+        current = get_language(user_id)
+        keyboard = []
+        
+        # Create rows of 3 buttons each
+        options = [("fr", "français"), ("en", "english"), ("he", "עברית")]
+        keyboard = []
+        row = []
+        for option in options:
+            text = f"{option[1]} {'✅' if option[0] == current else ''}"
+            row.append(InlineKeyboardButton(text, callback_data=f"set_language_{option[0]}"))
+        if row:
+            keyboard.append(row)
+        keyboard.append([InlineKeyboardButton(t("btn_cancel", language), callback_data="settings")])
+
+        message = t("language_question", language)
+
+        await query.edit_message_text(
+            text=message,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="Markdown"
+        )
+    
+    elif setting.startswith("set_language_"):
+        language = setting.replace("set_language_", "")
+        update_language(user_id, language)
+        context.user_data.pop('conversation_state', None)
+        # Recharge les données du groupe après la modification
+        data = load_data()
+        await show_settings(update, context)
+    
 
 
 async def handle_timezone_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE, time_str: str):
     """Handle manual timezone text input"""
     user_id = update.effective_user.id
+    language = get_language(user_id)
     data = load_data()
     group_id = find_group_for_user(data, user_id)
     try:
@@ -370,27 +392,21 @@ async def handle_timezone_text_input(update: Update, context: ContextTypes.DEFAU
         context.user_data.pop('conversation_state', None)
         # Show confirmation
         adjusted_time = datetime.now(ZoneInfo("UTC")) + timedelta(hours=diff_hour)
-        message = f"✅ **Heure mise à jour avec succès !**\n\n" \
-                 f"**Votre heure:** {normalized_time}\n" \
-                 f"**Heure UTC:** {now.strftime('%H:%M')}\n" \
-                 f"**Décalage calculé:** {diff_hour:+d}h\n\n" \
-                 f"🕐 L'heure du bot est maintenant synchronisée avec votre fuseau horaire."
-        keyboard = [[InlineKeyboardButton("🏠 Retour aux paramètres", callback_data="settings")]]
+        message = t("timezone_success", language, normalized_time, now.strftime('%H:%M'), diff_hour)
+        keyboard = [[InlineKeyboardButton(t("btn_return_settings", language), callback_data="settings")]]
         # Use utility function to update main message
         await ensure_main_message_exists(update, context, data, group_id)
         await update_main_message(context, message, InlineKeyboardMarkup(keyboard))
     except Exception as e:
 
-        message = f"❌ **Erreur:** le format de l'heure est invalide\n\n" \
-                 f"**Format attendu:** HH:MM ou H:MM\n" \
-                 f"**Exemples:** 14:30, 7:30\n\n" \
-                 f"veuillez réessayer en entrant l'heure au format attendu"
-        keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="settings")]]
+        message = t("timezone_manual_error", language)
+        keyboard = [[InlineKeyboardButton(t("btn_cancel", language), callback_data="settings")]]
         await ensure_main_message_exists(update, context, data, group_id)
         await update_main_message(context, message, InlineKeyboardMarkup(keyboard))
 
 async def handle_last_bottle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE, value_str: str):
     user_id = update.effective_user.id
+    language = get_language(user_id)
     data = load_data()
     group_id = find_group_for_user(data, user_id)
     try:
@@ -401,12 +417,13 @@ async def handle_last_bottle_text_input(update: Update, context: ContextTypes.DE
         update_group(int(group_id), data[group_id])
         data = load_data()
         context.user_data.pop('conversation_state', None)
-        message = f"✅ Taille du biberon mise à jour : {value}ml"
-        keyboard = [[InlineKeyboardButton("🏠 Retour aux paramètres", callback_data="settings")]]
+        message = t("bottle_size_success", language, value)
+        keyboard = [[InlineKeyboardButton(t("btn_return_settings", language), callback_data="settings")]]
         await ensure_main_message_exists(update, context, data, group_id)
         await update_main_message(context, message, InlineKeyboardMarkup(keyboard))
     except Exception:
-        message = "❌ Merci d'entrer une valeur numérique valide (ex: 120)."
-        keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="settings")]]
+        message = t("bottle_size_error", language)
+        keyboard = [[InlineKeyboardButton(t("btn_cancel", language), callback_data="settings")]]
         await ensure_main_message_exists(update, context, data, group_id)
         await update_main_message(context, message, InlineKeyboardMarkup(keyboard)) 
+

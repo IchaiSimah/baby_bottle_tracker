@@ -3,7 +3,8 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 from zoneinfo import ZoneInfo
 from utils import load_data, save_data, find_group_for_user, create_personal_group, is_valid_time, normalize_time, delete_user_message, update_main_message, set_group_message_info, load_user_data,  update_all_group_messages
-from database import add_poop_to_group
+from database import add_poop_to_group, get_language
+from translations import t
 
 ASK_POOP_TIME, ASK_POOP_INFO = range(2)
 
@@ -23,6 +24,7 @@ async def add_poop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     
     user_id = update.effective_user.id
+    language = get_language(user_id)
     
     # Use optimized data loading
     data = load_user_data(user_id)
@@ -36,7 +38,7 @@ async def add_poop(update: Update, context: ContextTypes.DEFAULT_TYPE):
             data = load_user_data(user_id)
     
     if not data:
-        error_msg = "❌ Oups ! Impossible de trouver ou créer votre groupe personnel pour le moment. Veuillez réessayer plus tard."
+        error_msg = t("error_create_group", language)
         await query.edit_message_text(error_msg)
         return
     
@@ -72,11 +74,11 @@ async def add_poop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Add "Now" and "Cancel" buttons
     keyboard.append([
-        InlineKeyboardButton("🕐 Maintenant", callback_data="poop_time_now"),
-        InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+        InlineKeyboardButton(t("btn_now", language), callback_data="poop_time_now"),
+        InlineKeyboardButton(t("btn_cancel", language), callback_data="cancel")
     ])
     
-    message = "⏰ **À quelle heure a eu lieu ce changement de couche ?**\n\n*Ou tapez une heure manuellement (ex: 14:30)*"
+    message = t("add_poop_time_question", language)
     
     # Set conversation state for text input
     context.user_data['conversation_state'] = 'poop_time'
@@ -103,6 +105,7 @@ async def handle_poop_time(update: Update, context: ContextTypes.DEFAULT_TYPE, t
         await delete_user_message(context, update.effective_chat.id, update.message.message_id)
     
     user_id = update.effective_user.id
+    language = get_language(user_id)
     
     # Use optimized data loading
     data = load_user_data(user_id)
@@ -111,7 +114,7 @@ async def handle_poop_time(update: Update, context: ContextTypes.DEFAULT_TYPE, t
         data = load_data()
         group_id = find_group_for_user(data, user_id)
         if not group_id or group_id not in data:
-            error_msg = "❌ Oups ! Impossible de trouver ou créer votre groupe personnel pour le moment. Veuillez réessayer plus tard."
+            error_msg = t("error_create_group", language)
             if hasattr(update, 'message') and update.message:
                 await update.message.reply_text(error_msg)
             elif hasattr(update, 'callback_query') and update.callback_query:
@@ -133,14 +136,14 @@ async def handle_poop_time(update: Update, context: ContextTypes.DEFAULT_TYPE, t
         else:
             normalized_time = normalize_time(time_str)
             if not is_valid_time(normalized_time):
-                error_msg = "❌ Format d'heure invalide. Veuillez réessayer avec un format comme 14:30."
+                error_msg = t("error_invalid_time", language)
                 if query:
                     await query.edit_message_text(
                         error_msg,
-                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Annuler", callback_data="cancel")]])
+                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_cancel", language), callback_data="cancel")]])
                     )
                 else:
-                    await update_main_message(context, error_msg, InlineKeyboardMarkup([[InlineKeyboardButton("❌ Annuler", callback_data="cancel")]]))
+                    await update_main_message(context, error_msg, InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_cancel", language), callback_data="cancel")]]))
                 return ASK_POOP_TIME
             today = (datetime.now(ZoneInfo("UTC")) + time_difference).date()
             hour, minute = map(int, normalized_time.split(":"))
@@ -151,10 +154,10 @@ async def handle_poop_time(update: Update, context: ContextTypes.DEFAULT_TYPE, t
                 dt = dt - timedelta(days=1)
         context.user_data['poop_time'] = dt
         keyboard = [
-            [InlineKeyboardButton("✅ Terminer", callback_data="poop_info_none")],
-            [InlineKeyboardButton("❌ Annuler", callback_data="cancel")]
+            [InlineKeyboardButton(t("btn_finish", language), callback_data="poop_info_none")],
+            [InlineKeyboardButton(t("btn_cancel", language), callback_data="cancel")]
         ]
-        message = f"💩 **Changement enregistré à {dt.strftime('%H:%M')}**\n\nCliquez sur 'Terminer' pour enregistrer sans information supplémentaire.\n\n*Ou tapez une information si nécessaire.*"
+        message = t("poop_recorded", language, dt.strftime('%H:%M'))
         context.user_data['conversation_state'] = 'poop_info'
         if query:
             await query.edit_message_text(
@@ -168,14 +171,14 @@ async def handle_poop_time(update: Update, context: ContextTypes.DEFAULT_TYPE, t
                 set_group_message_info(data, group_id, user_id, context.user_data['main_message_id'], context.user_data['chat_id'])
         return ASK_POOP_INFO
     except Exception as e:
-        error_msg = f"❌ Oups ! Une erreur s'est produite : {str(e)}"
+        error_msg = t("error_general", language)
         if query:
             await query.edit_message_text(
                 error_msg,
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Annuler", callback_data="cancel")]])
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_cancel", language), callback_data="cancel")]])
             )
         else:
-            await update_main_message(context, error_msg, InlineKeyboardMarkup([[InlineKeyboardButton("❌ Annuler", callback_data="cancel")]]))
+            await update_main_message(context, error_msg, InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_cancel", language), callback_data="cancel")]]))
         return ConversationHandler.END
 
 async def handle_poop_info(update: Update, context: ContextTypes.DEFAULT_TYPE, info: str = None):
@@ -192,25 +195,27 @@ async def handle_poop_info(update: Update, context: ContextTypes.DEFAULT_TYPE, i
         if not info:
             info = update.message.text.strip()
         await delete_user_message(context, update.effective_chat.id, update.message.message_id)
+    
+    user_id = update.effective_user.id
+    language = get_language(user_id)
+    
     try:
         dt = context.user_data.get('poop_time')
         if not dt:
-            error_msg = "❌ Erreur: temps non trouvé. Veuillez recommencer."
+            error_msg = t("error_not_found_time", language)
             if query:
                 await query.edit_message_text(
                     error_msg,
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Annuler", callback_data="cancel")]])
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_cancel", language), callback_data="cancel")]])
                 )
             else:
-                user_id = update.effective_user.id
                 data = load_user_data(user_id)
                 if not data:
                     data = load_data()
                 group_id = find_group_for_user(data, user_id)
-                await update_main_message(context, error_msg, InlineKeyboardMarkup([[InlineKeyboardButton("❌ Annuler", callback_data="cancel")]]))
+                await update_main_message(context, error_msg, InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_cancel", language), callback_data="cancel")]]))
             return ConversationHandler.END
         
-        user_id = update.effective_user.id
         data = load_user_data(user_id)
         if not data:
             data = load_data()
@@ -227,10 +232,11 @@ async def handle_poop_info(update: Update, context: ContextTypes.DEFAULT_TYPE, i
         
         # Return to main message with updated data
         from handlers.queries import get_main_message_content
-        message_text, keyboard = get_main_message_content(data, group_id)
-        success_text = f"✅ **Caca enregistré à {dt.strftime('%H:%M')} !**"
+        message_text, keyboard = get_main_message_content(data, group_id, language)
         if info:
-            success_text += f"\nInfo: {info}"
+            success_text = t("poop_added_with_info", language, dt.strftime('%H:%M'), info)
+        else:
+            success_text = t("poop_added_success", language, dt.strftime('%H:%M'))
         success_text += f"\n\n{message_text}"
         
         if query:
@@ -257,19 +263,18 @@ async def handle_poop_info(update: Update, context: ContextTypes.DEFAULT_TYPE, i
         
         return ConversationHandler.END
     except Exception as e:
-        error_msg = f"❌ Erreur: {str(e)}"
+        error_msg = t("error_general", language)
         if query:
             await query.edit_message_text(
                 error_msg,
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Annuler", callback_data="cancel")]])
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_cancel", language), callback_data="cancel")]])
             )
         else:
-            user_id = update.effective_user.id
             data = load_user_data(user_id)
             if not data:
                 data = load_data()
             
             group_id = find_group_for_user(data, user_id)
-            await update_main_message(context, error_msg, InlineKeyboardMarkup([[InlineKeyboardButton("❌ Annuler", callback_data="cancel")]]))
+            await update_main_message(context, error_msg, InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_cancel", language), callback_data="cancel")]]))
         return ConversationHandler.END
 

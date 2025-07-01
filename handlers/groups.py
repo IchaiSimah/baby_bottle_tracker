@@ -1,8 +1,10 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from utils import load_data, save_data, find_group_for_user, create_personal_group, delete_user_message, update_main_message
+from database import get_language
 from database import update_group, create_group, update_group_name,  get_user_group_id
 import re
+from translations import t
 
 async def show_groups_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show groups management menu"""
@@ -11,6 +13,7 @@ async def show_groups_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     data = load_data()
     user_id = update.effective_user.id
+    language = get_language(user_id)
     group_id = find_group_for_user(data, user_id)
     
     # Only create personal group if user has no group
@@ -18,8 +21,8 @@ async def show_groups_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         group_id = create_personal_group(data, user_id)
     
     if not group_id or group_id not in data:
-        error_msg = "❌ Oups ! Impossible de trouver ou créer votre groupe personnel pour le moment. Veuillez réessayer plus tard."
-        await query.edit_message_text(error_msg)
+        error_msg = t("error_find_group", language)
+        await query.edit_message_text(error_msg, parse_mode="Markdown")
         return
     
     # Get current group info
@@ -28,30 +31,28 @@ async def show_groups_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     group_id_str = str(group_id)
     member_count = len(group_info.get("users", []))
     
-    message = f"👥 **Gestion des Groupes** 🏘️\n\n"
-    message += f"**🏠 Groupe actuel :** `{group_name}`\n"
-    message += f"**🆔 id du groupe :** ||{group_id_str}||\n"
-    message += f"**👤 Membres :** {member_count}\n"
+    message = t("groups_title", language)
+    message += t("groups_current", language, group_name, group_id_str, member_count)
     
     # Convert group_id to string for startswith check
     if group_id_str.startswith("group_"):
-        message += "\n*Vous êtes dans un groupe personnel* 👤\n"
+        message += t("groups_personal", language)
     else:
-        message += "\n*Vous êtes dans un groupe partagé* 👥\n"
+        message += t("groups_shared", language)
     
     # Create keyboard
     keyboard = [
-        [InlineKeyboardButton("✏️ Renommer le groupe", callback_data="group_rename")],
-        [InlineKeyboardButton("🔗 Rejoindre un groupe", callback_data="group_join")],
-        [InlineKeyboardButton("➕ Créer un groupe", callback_data="group_create")],
+        [InlineKeyboardButton(t("btn_rename_group", language), callback_data="group_rename")],
+        [InlineKeyboardButton(t("btn_join_group", language), callback_data="group_join")],
+        [InlineKeyboardButton(t("btn_create_group", language), callback_data="group_create")],
     ]
     
     if not group_id_str.startswith("group_"):
-        keyboard.append([InlineKeyboardButton("🚪 Quitter le groupe", callback_data="group_leave")])
+        keyboard.append([InlineKeyboardButton(t("btn_leave_group", language), callback_data="group_leave")])
     
     keyboard.append([
-        InlineKeyboardButton("🏠 Accueil", callback_data="refresh"),
-        InlineKeyboardButton("❌ Annuler", callback_data="cancel")
+        InlineKeyboardButton(t("btn_home", language), callback_data="refresh"),
+        InlineKeyboardButton(t("btn_cancel", language), callback_data="cancel")
     ])
     
     await query.edit_message_text(
@@ -78,7 +79,7 @@ async def handle_group_actions(update: Update, context: ContextTypes.DEFAULT_TYP
         group_id = create_personal_group(data, user_id)
     
     if not group_id or group_id not in data:
-        error_msg = "❌ Erreur : impossible de trouver ou créer votre groupe personnel. Merci de réessayer plus tard."
+        error_msg = t("error_find_group", get_language(user_id))
         await query.edit_message_text(error_msg)
         return
     
@@ -101,19 +102,15 @@ async def handle_group_actions(update: Update, context: ContextTypes.DEFAULT_TYP
 async def show_rename_group(update: Update, context: ContextTypes.DEFAULT_TYPE, current_group_id: str):
     """Show rename group interface"""
     query = update.callback_query
+    language = get_language(update.effective_user.id)
     data = load_data()
     
-    message = f"✏️ **Renommer le groupe** 🏷️\n\n"
-    message += f"Groupe actuel : `{data[current_group_id]['name']}`\n\n"
-    message += "*Tapez le nouveau nom du groupe :*\n"
-    message += "• 3-20 caractères\n"
-    message += "• Lettres, chiffres, espaces, tirets\n"
-    message += "• Pas de caractères spéciaux"
+    message = t("rename_group_title", language, data[current_group_id]['name'])
     
     # Set conversation state for text input
     context.user_data['conversation_state'] = 'group_rename'
     
-    keyboard = [[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]]
+    keyboard = [[InlineKeyboardButton(t("btn_home", language), callback_data="refresh")]]
     
     await query.edit_message_text(
         text=message,
@@ -124,17 +121,13 @@ async def show_rename_group(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 async def show_join_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show join group interface"""
     query = update.callback_query
-    
-    message = "🔗 **Rejoindre un groupe** 👥\n\n"
-    message += "*Tapez le nom exact du groupe à rejoindre :*\n"
-    message += "• Le nom doit correspondre exactement\n"
-    message += "• Respectez les majuscules/minuscules\n"
-    message += "• Le groupe doit exister"
+    language = get_language(update.effective_user.id)
+    message = t("join_group_title", language)
     
     # Set conversation state for text input
     context.user_data['conversation_state'] = 'group_join'
     
-    keyboard = [[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]]
+    keyboard = [[InlineKeyboardButton(t("btn_home", language), callback_data="refresh")]]
     
     await query.edit_message_text(
         text=message,
@@ -145,18 +138,13 @@ async def show_join_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def show_create_group(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Show create group interface"""
     query = update.callback_query
-    
-    message = "➕ **Créer un nouveau groupe** 🆕\n\n"
-    message += "*Tapez le nom du nouveau groupe :*\n"
-    message += "• 3-20 caractères\n"
-    message += "• Lettres, chiffres, espaces, tirets\n"
-    message += "• Pas de caractères spéciaux\n"
-    message += "• Nom unique requis"
+    language = get_language(update.effective_user.id)
+    message = t("create_group_title", language)
     
     # Set conversation state for text input
     context.user_data['conversation_state'] = 'group_create'
     
-    keyboard = [[InlineKeyboardButton("🏠 Accueil", callback_data="refresh")]]
+    keyboard = [[InlineKeyboardButton(t("btn_home", language), callback_data="refresh")]]
     
     await query.edit_message_text(
         text=message,
@@ -179,15 +167,15 @@ async def rename_group(update: Update, context: ContextTypes.DEFAULT_TYPE, curre
         query = None
         # Delete user message for clean chat
         await delete_user_message(context, update.effective_chat.id, update.message.message_id)
-    
+    language = get_language(update.effective_user.id)
     # Validate new name
     if not is_valid_group_name(new_name):
-        message = "❌ **Nom invalide**\n\nLe nom doit contenir 3-20 caractères et ne peut contenir que des lettres, chiffres, espaces et tirets. \n Veuillez réessayer."
+        message = t("rename_group_error", language)
         
         # Create keyboard with retry and return options
         keyboard = [
-            [InlineKeyboardButton("🏠 Accueil", callback_data="refresh")],
-            [InlineKeyboardButton("⬅️ Retour", callback_data="settings")]
+            [InlineKeyboardButton(t("btn_home", language), callback_data="refresh")],
+            [InlineKeyboardButton(t("btn_return_settings", language), callback_data="settings")]
         ]
         
         # Keep conversation state active for retry
@@ -208,12 +196,12 @@ async def rename_group(update: Update, context: ContextTypes.DEFAULT_TYPE, curre
     # Check if name already exists using loaded data instead of database call
     for group_id, group_info in data.items():
         if group_info['name'] == new_name:
-            message = f"❌ **Nom déjà pris**\n\nLe groupe `{new_name}` existe déjà. \n Veuillez choisir un autre nom."
+            message = t("rename_group_exists", language, new_name)
             
             # Create keyboard with retry and return options
             keyboard = [
-                [InlineKeyboardButton("🏠 Accueil", callback_data="refresh")],
-                [InlineKeyboardButton("⬅️ Retour", callback_data="settings")]
+                [InlineKeyboardButton(t("btn_home", language), callback_data="refresh")],
+                [InlineKeyboardButton(t("btn_return_settings", language), callback_data="settings")]
             ]
             
             # Keep conversation state active for retry
@@ -241,8 +229,7 @@ async def rename_group(update: Update, context: ContextTypes.DEFAULT_TYPE, curre
         group_id = find_group_for_user(data, user_id)
         message_text, main_keyboard = get_main_message_content(data, group_id)
         
-        # Add confirmation message to avoid "Message is not modified" error
-        success_text = f"✅ **Groupe renommé !**\n\nLe groupe a été renommé en `{new_name}`\n\n{message_text}"
+        success_text = t("rename_group_success", language, new_name, message_text)
         
         if query:
             await query.edit_message_text(
@@ -256,12 +243,12 @@ async def rename_group(update: Update, context: ContextTypes.DEFAULT_TYPE, curre
 
     else:
         # Error updating group name
-        message = "❌ **Erreur**\n\nImpossible de renommer le groupe. Veuillez réessayer."
+        message = t("rename_group_error", language)
         
         # Create keyboard with retry and return options
         keyboard = [
-            [InlineKeyboardButton("🏠 Accueil", callback_data="refresh")],
-            [InlineKeyboardButton("⬅️ Retour", callback_data="settings")]
+            [InlineKeyboardButton(t("btn_home", language), callback_data="refresh")],
+            [InlineKeyboardButton(t("btn_return_settings", language), callback_data="settings")]
         ]
         
         # Keep conversation state active for retry
@@ -301,15 +288,15 @@ async def join_group(update: Update, context: ContextTypes.DEFAULT_TYPE, target_
         if group_info.get('name') == target_group_name:
             target_group_id = group_id
             break
-    
+    language = get_language(user_id)
     # Check if group exists
     if target_group_id is None:
-        message = "❌ **Groupe introuvable**\n\nCe groupe n'existe pas.\nVérifiez le nom et réessayez."
+        message = t("join_group_not_found", language, target_group_name)
         
         # Create keyboard with retry and return options
         keyboard = [
-            [InlineKeyboardButton("🏠 Accueil", callback_data="refresh")],
-            [InlineKeyboardButton("⬅️ Retour", callback_data="settings")]
+            [InlineKeyboardButton(t("btn_home", language), callback_data="refresh")],
+            [InlineKeyboardButton(t("btn_return_settings", language), callback_data="settings")]
         ]
         
         context.user_data['conversation_state'] = 'group_join'
@@ -327,12 +314,12 @@ async def join_group(update: Update, context: ContextTypes.DEFAULT_TYPE, target_
     
     # Check if user is already in this group
     if current_group_id == target_group_id:
-        message = f"ℹ️ **Déjà dans le groupe**\n\nVous êtes déjà dans `{target_group_name}`."
+        message = t("join_group_already_member", language, target_group_name)
         
         # Create keyboard with return options
         keyboard = [
-            [InlineKeyboardButton("🏠 Accueil", callback_data="refresh")],
-            [InlineKeyboardButton("⬅️ Retour", callback_data="settings")]
+            [InlineKeyboardButton(t("btn_home", language), callback_data="refresh")],
+            [InlineKeyboardButton(t("btn_return_settings", language), callback_data="settings")]
         ]
         
         # Clear conversation state for already in group
@@ -352,10 +339,10 @@ async def join_group(update: Update, context: ContextTypes.DEFAULT_TYPE, target_
     # Remove user from current group
 
     if current_group_id:
-        message = f"ℹ️ **entrez l'id du groupe `{target_group_name}` pour rejoindre le groupe.**"
+        message = t("join_group_id_check", language, target_group_name)
         keyboard = [
-            [InlineKeyboardButton("🏠 Accueil", callback_data="refresh")],
-            [InlineKeyboardButton("⬅️ Retour", callback_data="settings")]
+            [InlineKeyboardButton(t("btn_home", language), callback_data="refresh")],
+            [InlineKeyboardButton(t("btn_return_settings", language), callback_data="settings")]
         ]
         await update_main_message(context, message, InlineKeyboardMarkup(keyboard))
         context.user_data['conversation_state'] = 'id_check_group_join'
@@ -366,14 +353,14 @@ async def id_check_group_join(update: Update, context: ContextTypes.DEFAULT_TYPE
     await delete_user_message(context, update.effective_chat.id, update.message.message_id)
     data = load_data()
     user_id = update.effective_user.id
+    language = get_language(user_id)
     target_group_id = context.user_data['target_group_id']
     current_group_id = find_group_for_user(data, user_id)
     if text != str(target_group_id):
-        message = f"ℹ️ **l'id du groupe est incorrect, veuillez réessayer.\n\n**"
-        message += f"**vous pouvez retrouver l'id du groupe dans les parametres des groupes.**"
+        message = t("join_group_id_incorrect", language)
         keyboard = [
-            [InlineKeyboardButton("🏠 Accueil", callback_data="refresh")],
-            [InlineKeyboardButton("⬅️ Retour", callback_data="settings")]
+            [InlineKeyboardButton(t("btn_home", language), callback_data="refresh")],
+            [InlineKeyboardButton(t("btn_return_settings", language), callback_data="settings")]
         ]
         await update_main_message(context, message, InlineKeyboardMarkup(keyboard))
         return 
@@ -405,7 +392,7 @@ async def id_check_group_join(update: Update, context: ContextTypes.DEFAULT_TYPE
     message_text, main_keyboard = get_main_message_content(data, group_id)
     target_group_name = data[target_group_id]['name']
     # Add confirmation message to avoid "Message is not modified" error
-    success_text = f"✅ **Groupe rejoint !**\n\nVous avez rejoint le groupe `{target_group_name}`\n\n{message_text}"
+    success_text = t("join_group_success", language, target_group_name, message_text)
     await update_main_message(context, success_text, main_keyboard)
 
 async def create_new_group(update: Update, context: ContextTypes.DEFAULT_TYPE, new_name: str):
@@ -418,15 +405,15 @@ async def create_new_group(update: Update, context: ContextTypes.DEFAULT_TYPE, n
         query = None
         # Delete user message for clean chat
         await delete_user_message(context, update.effective_chat.id, update.message.message_id)
-    
+    language = get_language(update.effective_user.id)
     # Validate new name
     if not is_valid_group_name(new_name):
-        message = "❌ **Nom invalide**\n\nLe nom doit contenir 3-20 caractères et ne peut contenir que des lettres, chiffres, espaces et tirets. \n Veuillez réessayer."
+        message = t("create_group_invalid_name", language)
         
         # Create keyboard with retry and return options
         keyboard = [
-            [InlineKeyboardButton("🏠 Accueil", callback_data="refresh")],
-            [InlineKeyboardButton("⬅️ Retour", callback_data="settings")]
+            [InlineKeyboardButton(t("btn_home", language), callback_data="refresh")],
+            [InlineKeyboardButton(t("btn_return_settings", language), callback_data="settings")]
         ]
         
         # Keep conversation state active for retry
@@ -453,12 +440,12 @@ async def create_new_group(update: Update, context: ContextTypes.DEFAULT_TYPE, n
     # Check if name already exists using loaded data instead of database call
     for group_id, group_info in data.items():
         if group_info['name'] == new_name:
-            message = f"❌ **Nom déjà pris**\n\nLe groupe `{new_name}` existe déjà. \n Veuillez choisir un autre nom."
+            message = t("create_group_exists", language, new_name)
             
             # Create keyboard with retry and return options
             keyboard = [
-                [InlineKeyboardButton("🏠 Accueil", callback_data="refresh")],
-                [InlineKeyboardButton("⬅️ Retour", callback_data="settings")]
+                [InlineKeyboardButton(t("btn_home", language), callback_data="refresh")],
+                [InlineKeyboardButton(t("btn_return_settings", language), callback_data="settings")]
             ]
             
             # Keep conversation state active for retry
@@ -502,7 +489,7 @@ async def create_new_group(update: Update, context: ContextTypes.DEFAULT_TYPE, n
     message_text, main_keyboard = get_main_message_content(data, group_id)
     
     # Add confirmation message to avoid "Message is not modified" error
-    success_text = f"✅ **Groupe créé !**\n\nLe groupe `{new_name}` a été créé\n\n{message_text}"
+    success_text = t("create_group_success", language, new_name, message_text)
     
     if query:
         await query.edit_message_text(
@@ -570,9 +557,9 @@ async def leave_group(update: Update, context: ContextTypes.DEFAULT_TYPE, curren
     from handlers.queries import get_main_message_content
     group_id = find_group_for_user(data, user_id)
     message_text, main_keyboard = get_main_message_content(data, group_id)
-    
+    language = get_language(user_id)
     # Add confirmation message to avoid "Message is not modified" error
-    success_text = f"✅ **Groupe quitté !**\n\nVous êtes retourné à votre groupe personnel\n\n{message_text}"
+    success_text = t("leave_group_success", language, message_text)
     
     if query:
         await query.edit_message_text(

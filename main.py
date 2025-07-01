@@ -19,6 +19,8 @@ from handlers.shabbat import (
     handle_shabbat_saturday_poop,
     handle_shabbat_saturday_bottle
 )
+from translations import t
+from database import get_language
 
 import sys
 import traceback
@@ -33,7 +35,6 @@ async def start(update, context):
     # Use optimized data loading
     data = load_user_data(user_id)
     print(f"DEBUG START: load_user_data returned: {data}")
-    
     if not data:
         print("No data found")
         # Fallback to create personal group if needed
@@ -47,7 +48,8 @@ async def start(update, context):
                 data = load_user_data(user_id)
     
     if not data:
-        error_msg = "❌ Oups ! Impossible de charger vos données pour le moment. Veuillez réessayer."
+        language = get_language(user_id)
+        error_msg = t("error_load_data", language)
         await update.message.reply_text(error_msg)
         return
     
@@ -56,7 +58,8 @@ async def start(update, context):
     print(f"DEBUG START: Group ID found: {group_id}")
     
     if not group_id:
-        error_msg = "❌ Oups ! Impossible de trouver votre groupe. Veuillez réessayer."
+        language = get_language(user_id)
+        error_msg = t("error_find_group", language)
         await update.message.reply_text(error_msg)
         return
     
@@ -80,13 +83,13 @@ async def start(update, context):
             print(f"DEBUG START: Erreur lors de la suppression de l'ancien message: {e}")
     
     # Create main message with inline keyboard
-    message_text, keyboard = get_main_message_content(data, group_id)
-    
+        message_text = "loading..."
+        keyboard = None
     # Toujours créer un nouveau message principal
-    sent_message = await update.message.reply_text(
-        message_text,
-        reply_markup=keyboard,
-        parse_mode="Markdown"
+        sent_message = await update.message.reply_text(
+            message_text,
+            reply_markup=keyboard,
+            parse_mode="Markdown"
     )
     
     print(f"DEBUG START: Nouveau message créé - ID: {sent_message.message_id}, Chat: {sent_message.chat_id}")
@@ -94,12 +97,37 @@ async def start(update, context):
     # Mettre à jour l'ID du message principal dans la base
     set_group_message_info(data, group_id, user_id, sent_message.message_id, sent_message.chat_id)
     await save_data(data, context)
-    
+    current = "en"
+    keyboard = []
+        
+    # Create rows of 3 buttons each
+    options = [("fr", "français"), ("en", "english"), ("he", "עברית")]
+    keyboard = []
+    row = []
+    for option in options:
+        text = f"{option[1]} {'✅' if option[0] == current else ''}"
+        row.append(InlineKeyboardButton(text, callback_data=f"set_language_{option[0]}"))
+    if row:
+        keyboard.append(row)
+    keyboard.append([InlineKeyboardButton(t("btn_cancel", "en"), callback_data="settings")])
+
+    message = t("language_question", "en")
+
+    await context.bot.edit_message_text(
+        chat_id=sent_message.chat_id,
+        message_id=sent_message.message_id,
+        text=message,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="Markdown"
+    )
     # Delete the user's command message for clean chat
     try:
         await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=update.message.message_id)
     except Exception as e:
         print(f"Failed to delete user command message: {e}")
+        # After creating the main message, immediately show the language choice menu
+
+        
 
 async def help_command(update, context):
     """Show help information in the main message"""
@@ -119,7 +147,8 @@ async def help_command(update, context):
             data = load_user_data(user_id)
     
     if not data:
-        error_msg = "❌ Oups ! Impossible de trouver ou créer votre groupe personnel pour le moment. Merci de réessayer plus tard."
+        language = get_language(user_id)
+        error_msg = t("error_create_group", language)
         if hasattr(update, 'message') and update.message:
             await update.message.reply_text(error_msg)
         elif hasattr(update, 'callback_query') and update.callback_query:
@@ -128,23 +157,10 @@ async def help_command(update, context):
     
     # Get the group ID from the loaded data
     group_id = list(data.keys())[0]
-    
-    # Create help message with return button
-    help_message = "👋 **Baby Bottle Tracker Bot** 🍼\n\n" \
-                  "**✨ Fonctionnalités principales :**\n" \
-                  "• 🍼 Ajouter/supprimer des biberons\n" \
-                  "• 💩 ajouter des cacas\n" \
-                  "• 📊 Voir les statistiques\n" \
-                  "• ⚙️ Paramètres personnalisables\n\n" \
-                  "**🎯 Utilisation :**\n" \
-                  "Utilisez les boutons dans le message principal pour naviguer.\n" \
-                  "Toutes les actions se font dans le même message !"
-    
+    language = get_language(user_id)
+    help_message = t("help_title", language) + t("help_features", language) + t("help_usage", language)
     # Create keyboard with just a return button
-    keyboard = InlineKeyboardMarkup([[
-        InlineKeyboardButton("🏠 Retour", callback_data="refresh")
-    ]])
-    
+    keyboard = InlineKeyboardMarkup([[InlineKeyboardButton(t("btn_return", language), callback_data="refresh")]])
     # Get existing main message info
     message_id, chat_id = get_group_message_info(data, group_id, user_id)
     
@@ -208,7 +224,8 @@ async def button_handler(update, context):
             data = load_user_data(user_id)
     
     if not data:
-        error_msg = "❌ Oups ! Impossible de trouver ou créer votre groupe personnel pour le moment. Merci de réessayer plus tard."
+        language = get_language(user_id)
+        error_msg = t("error_create_group", language)
         if hasattr(update, 'message') and update.message:
             await update.message.reply_text(error_msg)
         elif hasattr(update, 'callback_query') and update.callback_query:
@@ -221,6 +238,7 @@ async def button_handler(update, context):
     # Store the current message ID for this interaction (only for this session)
     context.user_data['main_message_id'] = query.message.message_id
     context.user_data['chat_id'] = query.message.chat.id
+    set_group_message_info(data, group_id, user_id, query.message.message_id, query.message.chat.id)
     
     action = query.data
     
@@ -337,6 +355,11 @@ async def button_handler(update, context):
         setting = action.replace("set_time_", "")
         return await handle_settings(update, context, f"set_time_{setting}")
 
+    elif action.startswith("set_language_"):
+        # Handle language setting
+        setting = action.replace("set_language_", "")
+        return await handle_settings(update, context, f"set_language_{setting}")
+
     elif action == "manual_time_input":
         # Handle manual time input
         return await handle_settings(update, context, "manual_time_input")
@@ -362,7 +385,8 @@ async def button_handler(update, context):
     else:
         # Unknown action
         print(f"Unknown action: {action}")
-        await query.edit_message_text("❌ Action inconnue. Veuillez réessayer.")
+        language = get_language(user_id)
+        await query.edit_message_text(t("error_unknown_action", language))
 
 async def error_handler(update, context):
     """Handle errors gracefully"""
@@ -375,7 +399,7 @@ async def error_handler(update, context):
     try:
         if update and update.effective_user:
             user_id = update.effective_user.id
-            
+            language = get_language(user_id)
             # Try to get user data to show error in main message
             try:
                 data = load_user_data(user_id)
@@ -389,8 +413,8 @@ async def error_handler(update, context):
                             from handlers.queries import get_main_message_content
                             
                             if group_id:
-                                message_text, keyboard = get_main_message_content(data, group_id)
-                                error_text = f"❌ **Une erreur s'est produite**\n\n{message_text}"
+                                message_text, keyboard = get_main_message_content(data, group_id, language)
+                                error_text = f"{t('error_general', language)}**\n\n{message_text}"
                                 
                                 try:
                                     await context.bot.edit_message_text(
@@ -410,7 +434,8 @@ async def error_handler(update, context):
                 print(f"Failed to edit main message with error: {edit_error}")
             
             # Fallback: send new error message
-            await update.effective_message.reply_text("❌ Une erreur s'est produite. Veuillez réessayer. Erreur: " + str(context.error))
+            language = get_language(user_id)
+        await update.effective_message.reply_text(t("error_general", language) + " " + str(context.error))
     except Exception as e:
         print(f"Failed to send error message: {e}")
 
@@ -436,13 +461,13 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = load_user_data(user_id)
     if not data:
         data = load_data()
-    
+    language = get_language(user_id)
     group_id = find_group_for_user(data, user_id)
     if not group_id:
         group_id = create_personal_group(data, user_id)
         await save_data(data, context)
     if not group_id or group_id not in data:
-        error_msg = "❌ Erreur : impossible de trouver ou créer votre groupe personnel. Merci de réessayer plus tard."
+        error_msg = t("error_create_group", language)
         if hasattr(update, 'message') and update.message:
             await update.message.reply_text(error_msg)
         elif hasattr(update, 'callback_query') and update.callback_query:
@@ -452,8 +477,7 @@ async def handle_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Check if user is in a conversation state
     if 'conversation_state' not in context.user_data:
         # User is not in a conversation - show helpful message
-        help_message = "💡 **aucune saisie n'est requise**\n\n" \
-                      "• ⚙️ utilisez les boutons pour interagir avec le bot !"
+        help_message = t("help_no_input", language)
         
         try:
             # Send a temporary help message that will be deleted after a few seconds

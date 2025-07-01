@@ -4,7 +4,7 @@ import sqlite3
 import shutil
 from datetime import datetime, date
 from typing import Dict, List, Optional, Any
-from config import DATABASE_PATH, GROUPS_TABLE, ENTRIES_TABLE, POOP_TABLE, USER_MESSAGES_TABLE
+from config import DATABASE_PATH, GROUPS_TABLE, ENTRIES_TABLE, POOP_TABLE, USER_MESSAGES_TABLE, LANGUAGES_TABLE
 from dateutil import parser as date_parser
 import threading
 from zoneinfo import ZoneInfo
@@ -691,4 +691,34 @@ def update_group_name(group_id: int, new_name: str) -> bool:
         return True
     except Exception as e:
         print(f"Error updating group name: {e}")
+        return False
+
+def get_language(user_id: int) -> str:
+    """Stub for language retrieval. Should return 'fr', 'en', or 'he' for the user."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(f"SELECT language FROM {LANGUAGES_TABLE} WHERE user_id = ?", (user_id,))
+        result = cursor.fetchone()
+        if result:
+            return result['language']
+        cursor.execute(f"INSERT INTO {LANGUAGES_TABLE} (user_id, language) VALUES (?, ?)", (user_id, "fr"))
+        conn.commit()
+        return "fr"
+    except Exception as e:
+        print(f"Error getting language for user {user_id}: {e}")
+        return "fr"
+
+def update_language(user_id: int, language: str) -> bool:
+    """Update language"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        cursor.execute(f"UPDATE {LANGUAGES_TABLE} SET language = ? WHERE user_id = ?", (language, user_id))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error updating language for user {user_id}: {e}")
         return False
