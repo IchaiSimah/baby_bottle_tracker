@@ -497,16 +497,11 @@ async def generate_pdf_report(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     
     user_id = user.id
-    
+    language = get_language(user_id)
     # Message de chargement
-    loading_message = "⏳ **Génération du PDF en cours...**\n\n"
-    loading_message += "📄 Préparation du rapport...\n"
-    loading_message += "📊 Calcul des statistiques...\n"
-    loading_message += "📈 Création du graphique...\n"
-    loading_message += "🌍 Traduction du contenu...\n"
-    loading_message += "🎨 Mise en page..."
+    loading_message = tr("pdf_loading", language)
     
-    keyboard = [[InlineKeyboardButton("❌ Annuler", callback_data="pdf_cancel")]]
+    keyboard = [[InlineKeyboardButton(tr("btn_cancel", language), callback_data="pdf_cancel")]]
     
     await query.edit_message_text(
         text=loading_message,
@@ -518,11 +513,11 @@ async def generate_pdf_report(update: Update, context: ContextTypes.DEFAULT_TYPE
         # Charger les données
         stats_data = load_user_stats(user_id, days)
         if not stats_data:
-            error_msg = "❌ Impossible de charger vos données pour la période sélectionnée."
+            error_msg = tr("error_loading_data", language)
             await query.edit_message_text(
                 text=error_msg,
                 reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("🏠 Accueil", callback_data="refresh")
+                    InlineKeyboardButton(tr("btn_home", language), callback_data="refresh")
                 ]]),
                 parse_mode="Markdown"
             )

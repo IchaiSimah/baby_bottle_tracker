@@ -40,6 +40,16 @@ TRANSLATIONS = {
         "en": "❌ An error occurred. Please try again.",
         "he": "❌ אירעה שגיאה. אנא נסה שוב."
     },
+    "pdf_loading": {
+        "fr": "⏳ **Génération du PDF en cours...**\n Préparation du rapport...\n Calcul des statistiques...\n Création du graphique...\n Traduction du contenu...\n Mise en page...",
+        "en": "⏳ **PDF generation in progress...**\n Preparing the report...\n Calculating statistics...\n Creating the graph...\n Translating the content...\n Layout...",
+        "he": "⏳ **יוצר דוח PDF...**\n מכין את הדוח...\n מחשב את הסטטיסטיקה...\n יוצר את הגרף...\n מתרגם את התוכן...\n מכין את המסך..."
+    },
+    "error_loading_data": {
+        "fr": "❌ Impossible de charger vos données pour la période sélectionnée.",
+        "en": "❌ Unable to load your data for the selected period.",
+        "he": "❌ לא ניתן לטעון את הנתונים שלך לפרק המוקבץ."
+    },
     # Main menu
     "main_dashboard": {
         "fr": "🍼 **Suivi Bébé - Tableau de Bord**\n\n",
