@@ -74,10 +74,10 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total_ml_5days = sum(stats[d]["total_ml"] for d in stats)
     total_poops_5days = sum(stats[d]["poops"] for d in stats)
     
-    message += t("stats_summary", language, total_bottles_5days, total_ml_5days, total_poops_5days, round(total_ml_5days/total_bottles_5days if total_bottles_5days > 0 else 0, 1))
+    message += t("stats_summary", language, total_bottles_5days, total_ml_5days, total_poops_5days,round(total_ml_5days / 5, 1), round(total_ml_5days/total_bottles_5days if total_bottles_5days > 0 else 0, 1))
     message += t("stats_daily_detail", language)
 
-    for date_str in sorted(stats.keys()):
+    for date_str in stats.keys():
         day_stats = stats[date_str]
         day_name = t(day_stats["date"].strftime("%A")[:3], language)
         message += t("stats_day_format", language, date_str, day_name, day_stats["bottles"], day_stats["total_ml"], day_stats["poops"])

@@ -160,9 +160,9 @@ TRANSLATIONS = {
         "he": "📊 **סטטיסטיקה של 5 הימים האחרונים** 📈\n\n"
     },
     "stats_summary": {
-        "fr": "**📋 Résumé 5 jours :**\n• 🍼 {} biberons\n• 📏 {}ml au total\n• 💩 {} changements\n• 📈 Moyenne : {}ml/jour\n\n",
-        "en": "**📋 5-day summary:**\n• 🍼 {} bottles\n• 📏 {}ml total\n• 💩 {} changes\n• 📈 Average: {}ml/day\n\n",
-        "he": "**📋 סיכום 5 ימים:**\n• 🍼 {} בקבוקים\n• 📏 {}מ\"ל סה\"כ\n• 💩 {} החלפות\n• 📈 ממוצע: {}מ\"ל/יום\n\n"
+        "fr": "**📋 Résumé 5 jours :**\n• 🍼 {} biberons\n• 📏 {}ml au total\n• 💩 {} changements\n• 📈 Moyenne : {}ml/jour\n\n Moyenne par biberon : {}ml",
+        "en": "**📋 5-day summary:**\n• 🍼 {} bottles\n• 📏 {}ml total\n• 💩 {} changes\n• 📈 Average: {}ml/day\n\n Average per bottle: {}ml",
+        "he": "**📋 סיכום 5 ימים:**\n• 🍼 {} בקבוקים\n• 📏 {}מ\"ל סה\"כ\n• 💩 {} החלפות\n• 📈 ממוצע: {}מ\"ל/יום\n\n ממוצע לבקבוק: {}מ\"ל"
     },
     "stats_daily_detail": {
         "fr": "**📅 Détail par jour :**\n",

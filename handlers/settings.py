@@ -358,7 +358,9 @@ async def handle_settings(update: Update, context: ContextTypes.DEFAULT_TYPE, se
         context.user_data.pop('conversation_state', None)
         # Recharge les données du groupe après la modification
         data = load_data()
-        await show_settings(update, context)
+        from handlers.queries import get_main_message_content
+        message_text, keyboard = get_main_message_content(data, group_id, language)
+        await update_main_message(context, message_text, keyboard)
     
 
 
