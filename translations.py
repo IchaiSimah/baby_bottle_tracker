@@ -160,7 +160,7 @@ TRANSLATIONS = {
         "he": "📊 **סטטיסטיקה של 5 הימים האחרונים** 📈\n\n"
     },
     "stats_summary": {
-        "fr": "**📋 Résumé 5 jours :**\n• 🍼 {} biberons\n• 📏 {}ml au total\n• 💩 {} changements\n• 📈 Moyenne : {}ml/jour\n\n Moyenne par biberon : {}ml",
+        "fr": "**📋 Résumé 5 jours :**\n• 🍼 {} biberons\n• 📏 {}ml au total\n• 💩 {} changements\n• 📈 Moyenne : {}ml/jour\n Moyenne par biberon : {}ml\n\n",
         "en": "**📋 5-day summary:**\n• 🍼 {} bottles\n• 📏 {}ml total\n• 💩 {} changes\n• 📈 Average: {}ml/day\n\n Average per bottle: {}ml",
         "he": "**📋 סיכום 5 ימים:**\n• 🍼 {} בקבוקים\n• 📏 {}מ\"ל סה\"כ\n• 💩 {} החלפות\n• 📈 ממוצע: {}מ\"ל/יום\n\n ממוצע לבקבוק: {}מ\"ל"
     },
@@ -174,6 +174,13 @@ TRANSLATIONS = {
         "en": "\n🤖 **AI Analysis:**\n⏳ Generating...",
         "he": "\n🤖 **ניתוח בינה מלאכותית:**\n⏳ מייצר..."
     },
+
+    "stats_ai_analysis": {
+        "fr": "**📋 Analyse IA :**\n",
+        "en": "**📋 AI Analysis:**\n",
+        "he": "**📋 ניתוח בינה מלאכותית:**\n"
+    },
+
     "stats_day_format": {
         "fr": "`{} ({}) : {} biberons, {}ml, {} changements`\n",
         "en": "`{} ({}) : {} bottles, {}ml, {} changes`\n",
