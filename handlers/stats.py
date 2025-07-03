@@ -66,13 +66,13 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "poops": poop_count,
             "date": date
         }
-    
+    today_str = today.strftime("%d-%m-%Y")
     # Generate statistics message
     message = t("stats_title", language)
     
     total_bottles_5days = sum(stats[d]["bottles"] for d in stats)
     total_ml_5days = sum(stats[d]["total_ml"] for d in stats)
-    total_ml_4days = total_ml_5days - stats[0]["total_ml"]
+    total_ml_4days = total_ml_5days - stats[today_str]["total_ml"]
     total_poops_5days = sum(stats[d]["poops"] for d in stats)
     
     message += t("stats_summary", language, total_bottles_5days, total_ml_5days, total_poops_5days,round(total_ml_4days / 4, 1), round(total_ml_5days/total_bottles_5days if total_bottles_5days > 0 else 0, 1))
@@ -104,7 +104,8 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Update message with AI summary if available
     if ai_summary:
         # Remove loading message and add AI summary
-        message = message.replace(t("stats_ai_loading", language), f"\n{t("stats_ai_analysis", language)}\n{ai_summary}")
+        ai_message = t("stats_ai_analysis", language) + "\n" + ai_summary
+        message = message.replace(t("stats_ai_loading", language), ai_message)
         
         await query.edit_message_text(
             text=message,
